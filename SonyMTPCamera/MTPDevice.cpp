@@ -153,26 +153,32 @@ MTPDevice::Close()
             LOGINFO(L"MTPDevice::Close - opencount == 1, issuing actual close on device");
 
             // Per MS, close is automatically done when release bumps open count to 0
-            HRESULT hr = m_device->Close();
+            HRESULT hr = m_device ? m_device->Close() : E_POINTER;
 
-            if (SUCCEEDED(hr))
+            if (FAILED(hr))
             {
-                LOGINFO(L"MTPDevice::Close - closed, now releasing IUnknown");
-                m_openCount--;
+                // Tear down anyway: leaving m_openCount up would make ~MTPDevice spin forever
+                LOGERROR(L"Unable to close device cleanly - error: %08x, releasing it regardless", hr);
+            }
+
+            LOGINFO(L"MTPDevice::Close - closed, now releasing IUnknown");
+            m_openCount--;
+
+            if (m_device)
+            {
                 m_device->Release();
                 m_device = nullptr;
-
-                CloseHandle(m_handle);
-                m_handle = INVALID_HANDLE_VALUE;
-
-                LOGINFO(L"Out: Device::Close - Closed()");
-
-                closed = true;
             }
-            else
+
+            if (m_handle != INVALID_HANDLE_VALUE && m_handle != nullptr)
             {
-                LOGERROR(L"Unable to close device - error: %08x", hr);
+                CloseHandle(m_handle);
             }
+            m_handle = INVALID_HANDLE_VALUE;
+
+            LOGINFO(L"Out: Device::Close - Closed()");
+
+            closed = true;
         }
         else
         {
@@ -466,7 +472,7 @@ MTPDevice::InternalSend(Device::Op kind, Message* out)
 //    LOGTRACE(L"In: MTPDevice::InternalSend");
 
     HRESULT  hr = S_OK;
-    IPortableDeviceValues* pDevValues;
+    IPortableDeviceValues* pDevValues = nullptr;
     Message* result = new Message(0);
     PROPERTYKEY opType;
 
@@ -584,6 +590,22 @@ MTPDevice::InternalSend(Device::Op kind, Message* out)
         }
     }
 
+    // Without a command object (e.g. the calling thread has not initialised COM) or an open
+    // device there is nothing to send; return the failed (command 0) result.
+    if (pDevValues == nullptr || m_device == nullptr)
+    {
+        LOGERROR(L"InternalSend cannot send: %s, hr = x%lx",
+            pDevValues == nullptr ? L"unable to create command values (is COM initialised on this thread?)" : L"device is not open",
+            hr);
+
+        if (pDevValues)
+        {
+            pDevValues->Release();
+        }
+
+        return result;
+    }
+
     IPortableDeviceValues* spResults = nullptr;
 
     hr = m_device->SendCommand(0, pDevValues, &spResults);
@@ -647,7 +669,11 @@ MTPDevice::InternalSend(Device::Op kind, Message* out)
         }
 
         // Send the data to the device
-        spResults = NULL;
+        if (spResults)
+        {
+            spResults->Release();
+        }
+        spResults = nullptr;
         if (IsSuccess(hr, L"SetBufferValue(WPD_PROPERTY_MTP_EXT_TRANSFER_DATA) (Send Data)"))
         {
             hr = m_device->SendCommand(0, pDevValues, &spResults);
@@ -812,8 +838,17 @@ MTPDevice::InternalSend(Device::Op kind, Message* out)
 
                             if (IsSuccess(hr, L"GetBufferValue (WPD_PROPERTY_MTP_EXT_TRANSFER_DATA) (Read Data)"))
                             {
-                                result->AddData(pbBufferOut, cbBytesRead);
-                                LOGTRACE(L"Read %d of %d bytes", totalBytesRead, cbReportedDataSize);
+                                if (cbBytesRead == 0)
+                                {
+                                    // Driver reports success but delivers nothing: bail out rather than spin
+                                    LOGERROR(L"Read returned 0 bytes with %d of %d read, aborting transfer", totalBytesRead, cbReportedDataSize);
+                                    hr = E_FAIL;
+                                }
+                                else
+                                {
+                                    result->AddData(pbBufferOut, cbBytesRead);
+                                    LOGTRACE(L"Read %d of %d bytes", totalBytesRead, cbReportedDataSize);
+                                }
                             }
                         }
 
