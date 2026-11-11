@@ -326,6 +326,7 @@ processImage(CameraTaskInfo& info)
             else
             {
                 LOGERROR(L"Unable to generate pixel data, setting status failed");
+                info.pCamera->SetCaptureStatus(CaptureStatus::Failed);
                 result = StateResult::Fail;
             }
         }
