@@ -78,6 +78,7 @@
     <ClCompile Include="ExposureTests.cpp" />
     <ClCompile Include="CameraTaskTests.cpp" />
     <ClCompile Include="CropTests.cpp" />
+    <ClCompile Include="DeviceRemovedTests.cpp" />
   </ItemGroup>
   <ItemGroup>
     <!-- Sources under test, compiled straight from the DLL project -->

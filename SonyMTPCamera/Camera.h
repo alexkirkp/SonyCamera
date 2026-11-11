@@ -8,6 +8,7 @@
 #include "CameraSupportedProperties.h"
 #include "Lockable.h"
 #include "CameraWorker.h"
+#include "DeviceRemovedLatch.h"
 
 class CameraTask;
 class CameraWorker;
@@ -120,7 +121,7 @@ private:
     CameraWorker* pWorker = nullptr;
     bool initialized = false;
     // Set once the device is gone, so waits for it fail at once instead of timing out
-    volatile long m_deviceRemoved = 0;
+    DeviceRemovedLatch m_deviceRemoved;
     // Set from the start of StartCapture until the shutter has been released (doCapture). In
     // that window image-ready events must not start a download: StartCapture owns the image
     // buffer, and fetching while the camera processes a shot made an ILCE-7M3 drop off USB.

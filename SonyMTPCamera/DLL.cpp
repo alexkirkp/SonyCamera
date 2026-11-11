@@ -1683,6 +1683,26 @@ GetFocusLimit(HANDLE hCamera)
     return camera->GetFocusLimit();
 }
 
+HRESULT
+IsCameraRemoved(HANDLE hCamera, BOOL* removed)
+{
+    if (!removed)
+    {
+        return ERROR_INVALID_PARAMETER;
+    }
+
+    CameraLease camera = GetCameraManager()->GetCameraForHandle(hCamera);
+
+    if (!camera)
+    {
+        return ERROR_INVALID_HANDLE;
+    }
+
+    *removed = camera->IsDeviceRemoved() ? TRUE : FALSE;
+
+    return ERROR_SUCCESS;
+}
+
 DWORD
 GetFocusPosition(HANDLE hCamera)
 {

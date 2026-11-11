@@ -129,6 +129,11 @@ extern "C" {
     IMPEXP HRESULT CancelCapture(HANDLE hCamera, IMAGEINFO* info);
     IMPEXP HRESULT GetCameraInfo(HANDLE hCamera, CAMERAINFO* info, DWORD flags);
 
+    /* Sets *removed to TRUE once the camera has been unplugged (noticed idle or mid-exposure), FALSE
+       otherwise. It goes back to FALSE when the camera is opened again. Returns ERROR_SUCCESS, or
+       ERROR_INVALID_HANDLE / ERROR_INVALID_PARAMETER and leaves *removed untouched. */
+    IMPEXP HRESULT IsCameraRemoved(HANDLE hCamera, BOOL* removed);
+
     // More specific driver functions
 
     /* These two functions are used to generate a list of devices connected to computer that can be used to help determine identity

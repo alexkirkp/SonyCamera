@@ -111,7 +111,7 @@ Camera::OnDeviceRemoved()
     // Read the status before setting the flag, as GetCaptureStatus reports Failed once it is set.
     CaptureStatus status = GetCaptureStatus();
 
-    InterlockedExchange(&m_deviceRemoved, 1);
+    m_deviceRemoved.Set();
 
     if (status != CaptureStatus::Complete && status != CaptureStatus::Cancelled && status != CaptureStatus::Failed)
     {
@@ -122,7 +122,7 @@ Camera::OnDeviceRemoved()
 bool
 Camera::IsDeviceRemoved() const
 {
-    return m_deviceRemoved != 0;
+    return m_deviceRemoved.IsSet();
 }
 
 void
@@ -195,7 +195,7 @@ Camera::Open()
         if (m_device->GetOpenCount() == 1)
         {
             // A fresh open means the device is (back) on USB
-            InterlockedExchange(&m_deviceRemoved, 0);
+            m_deviceRemoved.Clear();
             m_device->StartNotifications(this);
         }
 
