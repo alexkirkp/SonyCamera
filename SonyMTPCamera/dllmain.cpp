@@ -22,13 +22,11 @@ BOOL APIENTRY DllMain( HMODULE hModule,
         break;
 
     case DLL_PROCESS_DETACH:
-        // lpReserved is non-null when the process is exiting. The worker threads have already been
-        // killed by then, so waiting for them would hang; the OS reclaims everything anyway.
-        if (lpReserved == nullptr)
-        {
-            // FreeLibrary: tear down only if something was ever initialised
-            Shutdown();
-        }
+        // Deliberately no cleanup. On process exit (lpReserved non-null) the worker threads are
+        // already dead and the OS reclaims everything. On FreeLibrary, tearing down would join the
+        // worker threads, which cannot exit while we hold the loader lock (deadlock). Hosts should
+        // call the exported ShutdownLibrary() before FreeLibrary.
+        (void)lpReserved;
         break;
     }
 

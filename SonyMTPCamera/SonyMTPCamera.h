@@ -134,6 +134,12 @@ extern "C" {
        ERROR_INVALID_HANDLE / ERROR_INVALID_PARAMETER and leaves *removed untouched. */
     IMPEXP HRESULT IsCameraRemoved(HANDLE hCamera, BOOL* removed);
 
+    /* Closes every open camera, stops the worker threads and releases the library's resources.
+       Hosts should call this before FreeLibrary: unloading the DLL does not tear anything down (doing
+       so under the loader lock would deadlock), it only leaves the threads to be reclaimed. The next
+       API call re-initialises the library. */
+    IMPEXP void    ShutdownLibrary();
+
     // More specific driver functions
 
     /* These two functions are used to generate a list of devices connected to computer that can be used to help determine identity

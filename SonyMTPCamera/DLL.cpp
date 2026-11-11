@@ -108,6 +108,12 @@ Shutdown()
     initialised = false;
 }
 
+extern "C" IMPEXP void
+ShutdownLibrary()
+{
+    Shutdown();
+}
+
 static DeviceManager*
 GetDeviceManager()
 {
