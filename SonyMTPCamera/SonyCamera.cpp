@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "SonyCamera.h"
+#include "FocusSteps.h"
 #include "Logger.h"
 #include "CameraException.h"
 #include "Locker.h"
@@ -253,6 +254,12 @@ SonyCamera::SetProperty(const Property id, PropertyValue* value)
 void
 SonyCamera::ResetFocus()
 {
+    if (m_focusSteps.empty() || m_focusSteps.rbegin()->second == 0)
+    {
+        LOGERROR(L"ResetFocus: no focus steps configured");
+        return;
+    }
+
     DeviceInfo di = GetDeviceInfo();
     UINT16 maxStepSize = m_focusSteps.rbegin()->first;
     UINT16 numResetSteps = 0;
@@ -278,6 +285,12 @@ SonyCamera::ResetFocus()
 UINT16
 SonyCamera::SetFocus(UINT16 focusPosition)
 {
+    if (m_focusSteps.empty())
+    {
+        LOGERROR(L"SetFocus: no focus steps configured");
+        return GetFocusLimit() + 1;
+    }
+
     DeviceInfo di = GetDeviceInfo();
     UINT16 maxStepSize = m_focusSteps.rbegin()->first;
     UINT16 focusDiff = static_cast<UINT16>(abs(m_lastFocusPosition - focusPosition));
@@ -356,65 +369,37 @@ SonyCamera::SetFocusSteps(std::wstring steps, std::wstring sleeps, bool handsOff
     // Steps is expected to have one value for each ascending step size (1..n)
     // Sleeps should have the same if all sleeps are different. If all sleeps are the same, just a single value is needed
     // If no value is present for sleeps, we'll use 100mS * step size
+    // Malformed steps leave focus unconfigured (focus calls then return an error) rather than
+    // keeping the previous lens's values.
     m_focusHandsOff = handsOff;
 
     m_focusSteps.clear();
     m_focusSleeps.clear();
+    m_focusLimit = 0;
+    m_currentFocusPosition = -1;
 
-    std::vector<double> deviceSteps;
-    std::vector<std::wstring> deviceSleeps;
-    std::wstring s;
-    std::wistringstream stepstream(steps);
+    FocusStepConfig cfg;
+    std::wstring error;
+    bool sleepsDefaulted = false;
 
-    // A list of comma separated pairs
-    while (std::getline(stepstream, s, L',')) {
-        deviceSteps.push_back(_wtof(s.c_str()));
-    }
-
-    if (sleeps.empty())
+    if (!ParseFocusSteps(steps, sleeps, cfg, error, sleepsDefaulted))
     {
-        sleeps = L"*100";
+        LOGERROR(L"Ignoring malformed focus steps '%s': %s", steps.c_str(), error.c_str());
+        return;
     }
 
-    std::wistringstream sleepstream(sleeps);
-
-    // A list of comma separated pairs
-    while (std::getline(sleepstream, s, L',')) {
-        deviceSleeps.push_back(s);
-    }
-
-    if (!deviceSteps.empty())
+    if (sleepsDefaulted)
     {
-//        UINT16 index = 1;
-        m_focusLimit = (UINT16)*deviceSteps.begin();
+        LOGERROR(L"Malformed focus sleeps '%s', using default of 100mS * step size", sleeps.c_str());
+    }
 
-        for (UINT16 index = 1; index <= deviceSteps.size(); index++)//std::vector<double>::const_iterator it = deviceSteps.begin(); it != deviceSteps.end(); it++)
-        {
-            double st = deviceSteps[index - 1];
-            double v = (double)m_focusLimit / st;// *it;
-            m_focusSteps[index] = (UINT16)v;
+    m_focusLimit = cfg.limit;
+    m_focusSteps = cfg.steps;
+    m_focusSleeps = cfg.sleeps;
 
-            // Now try to calculate the appropriate sleep for this step size
-            std::wstring sl = deviceSleeps[index <= deviceSleeps.size() ? index - 1 : deviceSleeps.size() - 1];
-
-            if (*sl.begin() == L'*')
-            {
-                // It's a multiplier
-                m_focusSleeps[index] = static_cast<unsigned short>(index * _wtoi(sl.substr(1).c_str()));
-            }
-            else
-            {
-                m_focusSleeps[index] = static_cast<unsigned short>(_wtoi(sl.c_str()));
-            }
-
-            LOGINFO(L"Focus step %d = %d (%d / %f) - post-move-sleep = %d", index, (int)v, m_focusLimit, st, m_focusSleeps[index]);// *it);
-
-//            index++;
-        }
-
-        // We should probably reset focus as we don't know where it is
-        m_currentFocusPosition = -1;
-//        SetFocus(m_focusLimit);
+    for (const auto& st : m_focusSteps)
+    {
+        LOGINFO(L"Focus step %d = %d (of %d) - post-move-sleep = %d", st.first, st.second, m_focusLimit, m_focusSleeps[st.first]);
     }
 }
 

@@ -1951,6 +1951,9 @@ IMPEXP HRESULT SetAttachedLens(HANDLE hCamera, LPWSTR lensId)
             return ERROR_NOT_FOUND;
         }
 
+        // Serialize with focus moves, which iterate the maps being replaced
+        Locker lock(camera);
+
         camera->SetFocusSteps(steps, sleeps, handsOff ? true : false);
         //#ifdef DEBUG
         LOGTRACE(L"Out: SetAttachedLens(...) success");
