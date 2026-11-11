@@ -182,6 +182,14 @@ CameraTask::IsComplete() const
     return this->status.currentStep == CAMERA_TASK_COMPLETE;
 }
 
+void
+CameraTask::Abort()
+{
+    status.currentStep = CAMERA_TASK_COMPLETE;
+    status.currentStepName = L"<aborted>";
+    success = false;
+}
+
 bool
 CameraTask::Step(CameraTaskInfo& info)
 {

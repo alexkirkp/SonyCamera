@@ -44,6 +44,8 @@ public:
     virtual ~CameraTask();
 
     bool Step(CameraTaskInfo& info);
+    // Complete the task as failed without running it (the camera is in a state it doesn't support)
+    void Abort();
     void SetResult(void* result);
     void* GetResult();
     void SetParam1(void* param);

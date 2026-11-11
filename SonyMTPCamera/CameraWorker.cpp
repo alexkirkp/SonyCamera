@@ -138,14 +138,31 @@ DWORD CameraWorker::Run()
             Sleep(50);
         }
 
-        if (currentTask && currentTask->SupportsCameraState(lastCameraState))
+        if (currentTask)
         {
             CameraTaskInfo info;
 
             info.pCamera = camera;
             info.pTask = currentTask;
 
-            bool complete = currentTask->Step(info);
+            bool complete;
+
+            if (currentTask->SupportsCameraState(lastCameraState))
+            {
+                complete = currentTask->Step(info);
+            }
+            else
+            {
+                // Would never be stepped, leaving its caller blocked: fail it instead
+                if (!isIdleTask)
+                {
+                    LOGWARN(L"Task %s not supported in camera state %d, failing it", currentTask->Name().c_str(), lastCameraState);
+                }
+
+                currentTask->Abort();
+                idleCount = 1; // never trigger the idle image check for a task that didn't run
+                complete = true;
+            }
 
             if (complete)
             {

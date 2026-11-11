@@ -221,7 +221,12 @@ Camera::Close()
         SetInitialized(false);
     }
 
-    pWorker->OnCameraStateChange(CameraState::Disconnected);
+    // Only report Disconnected when the device really closed; with other opens outstanding it is
+    // still connected and tasks must keep running
+    if (result)
+    {
+        pWorker->OnCameraStateChange(CameraState::Disconnected);
+    }
 
     return result;
 }
