@@ -9,6 +9,11 @@
 constexpr auto WORKER_THREAD_WAIT_FOR_EXIT = 1000;
 constexpr auto WORKER_THREAD_WAIT_FOR_EXIT_RETRIES = 5;
 
+// An idle worker sleeps until a task is queued or shutdown is requested. If neither happens it wakes
+// after this long to refresh properties and check for an image the camera didn't tell us about (the
+// camera normally reports both as events, so this is only a safety net).
+constexpr auto WORKER_IDLE_POLL_INTERVAL = 1000;
+
 class Camera;
 
 // When camera state changes, an callback is made to the worker thread so it can do its thing.
@@ -32,6 +37,7 @@ protected:
 
 private:
     HANDLE mutexHandle = INVALID_HANDLE_VALUE;
+    HANDLE wakeEvent = nullptr; // auto-reset; set when a task is queued or the worker should stop
     HANDLE threadHandle = INVALID_HANDLE_VALUE;
     DWORD threadId = 0;
     Camera* camera = nullptr;

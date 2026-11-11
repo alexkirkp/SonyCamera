@@ -10,12 +10,14 @@ CameraWorker::CameraWorker(Camera* pCamera)
     : camera(pCamera)
 {
     mutexHandle = CreateMutex(nullptr, FALSE, nullptr);
+    wakeEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
     threadHandle = CreateThread(NULL, 0, &_run, this, 0, &threadId);
 }
 
 CameraWorker::~CameraWorker()
 {
     stopRequested = true;
+    SetEvent(wakeEvent);
 
     // The worker only checks the flag between steps, and the camera may be in the middle of a long
     // exposure (shouldn't be, but... users!), so wait as long as it takes for the current step
@@ -50,6 +52,7 @@ CameraWorker::~CameraWorker()
     }*/
 
     CloseHandle(mutexHandle);
+    CloseHandle(wakeEvent);
     CloseHandle(threadHandle);
 }
 
@@ -120,14 +123,19 @@ DWORD CameraWorker::Run()
         }
         else
         {
+            // Nothing to do: sleep until a task is queued or we're asked to stop. Only if the whole
+            // interval passes quietly do we fall back to polling the camera.
+            if (WaitForSingleObject(wakeEvent, WORKER_IDLE_POLL_INTERVAL) == WAIT_OBJECT_0)
+            {
+                continue;
+            }
+
 #ifdef DEBUG
-            LOGTRACE(L"Nothing to do, queuing up a refresh properties task");
+            LOGTRACE(L"Idle for %d ms, queuing up a refresh properties task", WORKER_IDLE_POLL_INTERVAL);
 #endif
             currentTask = new RefreshPropertiesTask(false);
             isIdleTask = true;
             idleCount++;
-
-            Sleep(50);
         }
 
         if (currentTask)
@@ -152,7 +160,7 @@ DWORD CameraWorker::Run()
                 }
 
                 currentTask->Abort();
-                idleCount = 1; // never trigger the idle image check for a task that didn't run
+                idleCount = 0; // never trigger the idle image check for a task that didn't run
                 complete = true;
             }
 
@@ -174,7 +182,7 @@ DWORD CameraWorker::Run()
                     delete currentTask;
                 }
 
-                if (isIdleTask && idleCount % 20 == 0) {
+                if (isIdleTask && idleCount > 0) {
                     // Check to see if there's a photo waiting that we didn't get notified of
                     // This will just queue up a download - when the download completes
 #ifdef DEBUG
@@ -241,6 +249,11 @@ CameraWorker::QueueTask(CameraTask* task, HANDLE waiter)
 
     // Let runner continue
     ReleaseMutex(mutexHandle);
+
+    if (task)
+    {
+        SetEvent(wakeEvent);
+    }
 
     return task;
 }
