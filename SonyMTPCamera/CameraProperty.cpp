@@ -4,6 +4,7 @@
 #include "CameraProperty.h"
 #include "ResourceLoader.h"
 #include "Logger.h"
+#include "CameraException.h"
 
 CameraProperty::CameraProperty()
 {
@@ -305,53 +306,58 @@ CameraProperty::equals(CameraProperty* rhs) const
     return same;
 }
 
-DWORD
-CameraProperty::GetDWORD(BYTE* data, DWORD offset) const
+// The readers below throw CameraException rather than reading past dataLen: the property dump
+// comes from the camera and a short or corrupt one must not run off the end of the buffer.
+static void
+RequireBytes(DWORD dataLen, DWORD offset, DWORD needed)
 {
-    DWORD result = 0;
+    if (offset > dataLen || dataLen - offset < needed)
+    {
+        throw CameraException(L"Property data is truncated");
+    }
+}
 
-    result = (DWORD)(data[offset] + (data[offset + 1] << 8) + (data[offset + 2] << 16) + (data[offset + 3] << 24));
+DWORD
+CameraProperty::GetDWORD(BYTE* data, DWORD dataLen, DWORD offset) const
+{
+    RequireBytes(dataLen, offset, 4);
 
-    return result;
+    return (DWORD)(data[offset] + ((DWORD)data[offset + 1] << 8) + ((DWORD)data[offset + 2] << 16) + ((DWORD)data[offset + 3] << 24));
 }
 
 WORD
-CameraProperty::GetWORD(BYTE* data, DWORD offset) const
+CameraProperty::GetWORD(BYTE* data, DWORD dataLen, DWORD offset) const
 {
-    WORD result = 0;
+    RequireBytes(dataLen, offset, 2);
 
-    result = (WORD)(data[offset] + (data[offset + 1] << 8));
-
-    return result;
+    return (WORD)(data[offset] + (data[offset + 1] << 8));
 }
 
 BYTE
-CameraProperty::GetBYTE(BYTE* data, DWORD offset) const
+CameraProperty::GetBYTE(BYTE* data, DWORD dataLen, DWORD offset) const
 {
-    BYTE result = 0;
+    RequireBytes(dataLen, offset, 1);
 
-    result = data[offset];
-
-    return result;
+    return data[offset];
 }
 
 DWORD
-CameraProperty::Slurp(BYTE* data, DWORD offset)
+CameraProperty::Slurp(BYTE* data, DWORD dataLen, DWORD offset)
 {
-    m_info->SetId((Property)GetWORD(data, offset));
+    m_info->SetId((Property)GetWORD(data, dataLen, offset));
 
-    DataType type = (DataType)GetWORD(data, offset + 2);
+    DataType type = (DataType)GetWORD(data, dataLen, offset + 2);
 
     m_info->SetType(type);
-    m_info->SetAccess((Accessibility)GetBYTE(data, offset + 4));
-    m_info->SetSonySpare(GetBYTE(data, offset + 5));
+    m_info->SetAccess((Accessibility)GetBYTE(data, dataLen, offset + 4));
+    m_info->SetSonySpare(GetBYTE(data, dataLen, offset + 5));
 
     offset += 6;
 
-    m_info->SetDefault(ReadData(data, offset, type));
-    SetCurrentValue(ReadData(data, offset, type));
+    m_info->SetDefault(ReadData(data, dataLen, offset, type));
+    SetCurrentValue(ReadData(data, dataLen, offset, type));
 
-    m_info->SetFormMode((FormMode)GetBYTE(data, offset++));
+    m_info->SetFormMode((FormMode)GetBYTE(data, dataLen, offset++));
 
     switch (m_info->GetFormMode())
     {
@@ -361,68 +367,104 @@ CameraProperty::Slurp(BYTE* data, DWORD offset)
 
     case FormMode::RANGE:
         // Range
-        m_info->SetRange(ReadData(data, offset, type), ReadData(data, offset, type), ReadData(data, offset, type));
+    {
+        // Evaluated in order, so the reads stay in wire order (min, max, step)
+        PropertyValue* a = ReadData(data, dataLen, offset, type);
+        PropertyValue* b = nullptr;
+        PropertyValue* c = nullptr;
+
+        try
+        {
+            b = ReadData(data, dataLen, offset, type);
+            c = ReadData(data, dataLen, offset, type);
+        }
+        catch (...)
+        {
+            delete a;
+            delete b;
+            throw;
+        }
+
+        m_info->SetRange(a, b, c);
         break;
+    }
 
     case FormMode::ENUMERATION:
+    {
         // Enum
-        WORD numValues = GetWORD(data, offset);
+        WORD numValues = GetWORD(data, dataLen, offset);
 
         offset += 2;
 
         std::list<PropertyValue*> values;
 
-        for (WORD i = 0; i < numValues; i++)
+        try
         {
-            values.push_back(ReadData(data, offset, type));
+            for (WORD i = 0; i < numValues; i++)
+            {
+                values.push_back(ReadData(data, dataLen, offset, type));
+            }
+        }
+        catch (...)
+        {
+            for (PropertyValue* v : values)
+            {
+                delete v;
+            }
+
+            throw;
         }
 
         m_info->SetEnumeration(values);
 
         break;
     }
+    }
 
     return offset;
 }
 
 PropertyValue*
-CameraProperty::ReadData(BYTE* data, DWORD &offset, DataType /*type*/)
+CameraProperty::ReadData(BYTE* data, DWORD dataLen, DWORD &offset, DataType /*type*/)
 {
     PropertyValue* result;
 
     switch (m_info->GetType())
     {
     case DataType::UINT8:
-        result = new PropertyValue((UINT8)GetBYTE(data, offset++));
+        result = new PropertyValue((UINT8)GetBYTE(data, dataLen, offset));
+        offset++;
         break;
 
     case DataType::INT8:
-        result = new PropertyValue((INT8)GetBYTE(data, offset++));
+        result = new PropertyValue((INT8)GetBYTE(data, dataLen, offset));
+        offset++;
         break;
 
     case DataType::UINT16:
-        result = new PropertyValue((UINT16)GetWORD(data, offset));
+        result = new PropertyValue((UINT16)GetWORD(data, dataLen, offset));
         offset += 2;
         break;
 
     case DataType::INT16:
-        result = new PropertyValue((INT16)GetWORD(data, offset));
+        result = new PropertyValue((INT16)GetWORD(data, dataLen, offset));
         offset += 2;
         break;
 
     case DataType::UINT32:
-        result = new PropertyValue((UINT32)GetDWORD(data, offset));
+        result = new PropertyValue((UINT32)GetDWORD(data, dataLen, offset));
         offset += 4;
         break;
 
     case DataType::INT32:
-        result = new PropertyValue((INT32)GetDWORD(data, offset));
+        result = new PropertyValue((INT32)GetDWORD(data, dataLen, offset));
         offset += 4;
         break;
 
     default:
-        throw;
-        break;
+        // STR, 64-bit, arrays or a zero-filled buffer: we can't tell how long the value is, so
+        // the rest of the dump can't be parsed either.
+        throw CameraException(L"Unsupported property data type");
     }
 
     return result;

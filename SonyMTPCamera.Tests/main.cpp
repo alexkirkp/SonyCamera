@@ -6,6 +6,10 @@
 Logger logger;
 HINSTANCE dllInstance = nullptr;
 
+// String resources live in the DLL; the property parser tests don't need real text.
+#include "ResourceLoader.h"
+const std::wstring ResourceLoader::GetString(DWORD) { return L""; }
+
 int main()
 {
     setvbuf(stdout, nullptr, _IONBF, 0);

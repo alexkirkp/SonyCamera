@@ -2,6 +2,7 @@
 #include "CameraSettings.h"
 #include "CameraProperty.h"
 #include "Logger.h"
+#include "CameraException.h"
 
 CameraSettings::CameraSettings()
     : MessageReader(nullptr)
@@ -25,11 +26,27 @@ CameraSettings::CameraSettings(Message *message)
         DWORD first = GetDWORD(offset);
         GetDWORD(offset); // second count is read to advance the offset only
 
-        for (DWORD i = 0; i < first; i++)
+        BYTE* data = GetRawMessage();
+        DWORD dataLen = GetMessageSize();
+
+        // The count comes from the camera; each property needs at least 8 bytes (id, type,
+        // access, spare, default and current), so a larger count can't be true.
+        for (DWORD i = 0; i < first && offset < dataLen; i++)
         {
-            CameraProperty* prop = nullptr;
-            prop = f.Create((Property)GetWORD(offset));
-            offset = prop->Slurp(message->GetData(), offset - 2);
+            CameraProperty* prop = f.Create((Property)GetWORD(offset));
+
+            try
+            {
+                offset = prop->Slurp(data, dataLen, offset - 2);
+            }
+            catch (const CameraException&)
+            {
+                // Can't tell where the next property starts, so keep what parsed and stop
+                LOGERROR(L"Camera settings are truncated or malformed after %d of %u properties", size(), first);
+                delete prop;
+                break;
+            }
+
             AddProperty(prop);
         }
     }

@@ -79,6 +79,7 @@
     <ClCompile Include="CameraTaskTests.cpp" />
     <ClCompile Include="CropTests.cpp" />
     <ClCompile Include="DeviceRemovedTests.cpp" />
+    <ClCompile Include="PropertyParserTests.cpp" />
   </ItemGroup>
   <ItemGroup>
     <!-- Sources under test, compiled straight from the DLL project -->
@@ -91,6 +92,9 @@
     <ClCompile Include="..\SonyMTPCamera\Logger.cpp" />
     <ClCompile Include="..\SonyMTPCamera\Utils.cpp" />
     <ClCompile Include="..\SonyMTPCamera\CameraException.cpp" />
+    <ClCompile Include="..\SonyMTPCamera\CameraProperty.cpp" />
+    <ClCompile Include="..\SonyMTPCamera\CameraSettings.cpp" />
+    <ClCompile Include="..\SonyMTPCamera\PropertyInfo.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

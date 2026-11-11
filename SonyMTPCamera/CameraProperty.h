@@ -27,7 +27,9 @@ public:
     std::wstring AsString() const;
     virtual std::wstring AsString(PropertyValue* in) const;
     std::wstring ToString() const;
-    DWORD Slurp(BYTE* data, DWORD dataLen);
+    // Parses one property starting at offset and returns the offset after it. Throws
+    // CameraException if the data is truncated or has a type we can't read.
+    DWORD Slurp(BYTE* data, DWORD dataLen, DWORD offset);
     virtual bool equals(CameraProperty* rhs) const;
     virtual int Compare(CameraProperty* rhs) const;
     PropertyInfo* GetInfo() const;
@@ -37,10 +39,10 @@ public:
     virtual bool CanNudge() const;
 
 protected:
-    BYTE GetBYTE(BYTE* data, DWORD offset) const;
-    WORD GetWORD(BYTE* data, DWORD offset) const;
-    DWORD GetDWORD(BYTE* data, DWORD offset) const;
-    PropertyValue* ReadData(BYTE* data, DWORD &offset, DataType type);
+    BYTE GetBYTE(BYTE* data, DWORD dataLen, DWORD offset) const;
+    WORD GetWORD(BYTE* data, DWORD dataLen, DWORD offset) const;
+    DWORD GetDWORD(BYTE* data, DWORD dataLen, DWORD offset) const;
+    PropertyValue* ReadData(BYTE* data, DWORD dataLen, DWORD &offset, DataType type);
 
     PropertyInfo* m_info;
     PropertyValue* m_current;

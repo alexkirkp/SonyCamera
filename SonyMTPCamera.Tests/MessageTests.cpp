@@ -167,6 +167,33 @@ TEST(Message_StringLongerThanTheDataIsRejected)
     CHECK_EQ(off, 0u);
 }
 
+TEST(Message_ArrayCountLargerThanTheDataStopsAtTheEnd)
+{
+    // Claims 4 billion DWORDs but carries two
+    MessageWriter w(1);
+    w.WriteDWORD(0xFFFFFFFF);
+    w.WriteDWORD(5);
+    w.WriteDWORD(6);
+
+    Message* m = w.GetMessageObj();
+    TestReader r(m);
+    DWORD off = 0;
+
+    CHECK((r.GetDWORDArray(off) == std::list<DWORD>{ 5, 6 }));
+    CHECK_EQ(off, m->GetDataLen());
+
+    off = 0;
+    CHECK_EQ(r.GetBYTEArray(off).size(), 8u);
+
+    off = 0;
+    CHECK_EQ(r.GetWORDArray(off).size(), 4u);
+
+    off = 0;
+    CHECK(r.GetStringArray(off).size() <= 12u);
+
+    delete m;
+}
+
 TEST(Message_ReaderCopiesUnlessToldToTakeTheContents)
 {
     BYTE raw[] = { 9, 8, 7, 6 };

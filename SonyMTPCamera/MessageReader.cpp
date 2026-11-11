@@ -165,11 +165,30 @@ MessageReader::GetString(DWORD &offset)
     return result;
 }
 
+// The element count comes from the camera, so never trust it further than the data that is
+// actually there: clamp it to how many elements of at least minElementSize bytes can still fit.
+static DWORD
+ClampCount(DWORD count, DWORD offset, DWORD dataLen, DWORD minElementSize)
+{
+    DWORD remaining = offset < dataLen ? dataLen - offset : 0;
+    DWORD fits = remaining / minElementSize;
+
+    if (count > fits)
+    {
+        LOGERROR(L"Array claims %u elements but only room for %u remain in the data", count, fits);
+
+        return fits;
+    }
+
+    return count;
+}
+
 std::list<BYTE>
 MessageReader::GetBYTEArray(DWORD& offset)
 {
     std::list<BYTE> result;
     DWORD count = GetDWORD(offset);
+    count = ClampCount(count, offset, GetMessageSize(), 1);
 
     for (DWORD i = 0; i < count; i++)
     {
@@ -183,6 +202,7 @@ std::list<WORD>
 MessageReader::GetWORDArray(DWORD& offset)
 {
     DWORD count = GetDWORD(offset);
+    count = ClampCount(count, offset, GetMessageSize(), 2);
     std::list<WORD> result;
 
     for (DWORD i = 0; i < count; i++)
@@ -197,6 +217,7 @@ std::list<DWORD>
 MessageReader::GetDWORDArray(DWORD& offset)
 {
     DWORD count = GetDWORD(offset);
+    count = ClampCount(count, offset, GetMessageSize(), 4);
     std::list<DWORD> result;
 
     for (DWORD i = 0; i < count; i++)
@@ -210,12 +231,22 @@ MessageReader::GetDWORDArray(DWORD& offset)
 std::list<std::wstring>
 MessageReader::GetStringArray(DWORD& offset)
 {
+    // Every string takes at least its length byte
     DWORD count = GetDWORD(offset);
+    count = ClampCount(count, offset, GetMessageSize(), 1);
     std::list<std::wstring> result;
 
     for (DWORD i = 0; i < count; i++)
     {
+        DWORD before = offset;
+
         result.push_back(GetString(offset));
+
+        if (offset == before)
+        {
+            // A string that couldn't be read doesn't advance; the rest won't read either
+            break;
+        }
     }
 
     return result;
