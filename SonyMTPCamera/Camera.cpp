@@ -629,6 +629,11 @@ Camera::StartCapture(double duration, OutputMode outputMode, DWORD flags)
 
     std::unique_ptr<CameraSettings> cs(GetSettings());
 
+    if (!cs)
+    {
+        throw CameraException(L"Could not fetch camera settings");
+    }
+
     // Ensure the shutter control properties are correct
 
     // These null checks are necessary as some models advertise the property
@@ -648,6 +653,12 @@ Camera::StartCapture(double duration, OutputMode outputMode, DWORD flags)
     }
 
     std::unique_ptr<CameraSettings> cs2(GetSettings());
+
+    if (!cs2)
+    {
+        throw CameraException(L"Could not fetch camera settings");
+    }
+
     v = cs2->GetPropertyValue(Property::ShutterHalfDown);
 
     if (!v || v->GetUINT16() != up.GetUINT16())
@@ -730,19 +741,31 @@ Camera::StartCapture(double duration, OutputMode outputMode, DWORD flags)
         DoRefreshProperties();
 
         std::unique_ptr<CameraSettings> csLoop(GetSettings());
-        bufferStatusValue = csLoop->GetPropertyValue(Property::PhotoBufferStatus);
+        bufferStatusValue = csLoop ? csLoop->GetPropertyValue(Property::PhotoBufferStatus) : nullptr;
         bufferStatus = bufferStatusValue ? bufferStatusValue->GetUINT16() : 0;
     }
 
     cs = std::unique_ptr<CameraSettings>(GetSettings());
 
-    if (cs->GetPropertyValue(Property::ShutterButtonStatus)->GetUINT8() == 1)
+    if (!cs)
+    {
+        throw CameraException(L"Could not fetch camera settings");
+    }
+
+    PropertyValue* shutterButtonStatus = cs->GetPropertyValue(Property::ShutterButtonStatus);
+
+    if (!shutterButtonStatus)
+    {
+        throw CameraException(L"Could not fetch shutter button status");
+    }
+
+    if (shutterButtonStatus->GetUINT8() == 1)
     {
         LOGTRACE(L"  Shutter button is UP");
 
         PropertyValue* exposureTime = cs->GetPropertyValue(Property::ShutterSpeed);
 
-        if (exposureTime->GetType() == DataType::UNKNOWN)
+        if (!exposureTime || exposureTime->GetType() == DataType::UNKNOWN)
         {
             throw CameraException(L"Could not fetch exposure time");
         }
@@ -771,7 +794,7 @@ Camera::StartCapture(double duration, OutputMode outputMode, DWORD flags)
     }
     else
     {
-        LOGWARN(L"StartCapture: Cannot start capture as someone has their finger on the shutter button (%s)", cs->GetPropertyValue(Property::ShutterButtonStatus)->ToString().c_str());
+        LOGWARN(L"StartCapture: Cannot start capture as someone has their finger on the shutter button (%s)", shutterButtonStatus->ToString().c_str());
         throw CameraException(L"Cannot start capture as shutter already open");
     }
 
@@ -786,12 +809,15 @@ Camera::GetSettings() const
     DWORD waitResult = WaitForSingleObject(m_hBusyMutex, 1000);
     CameraSettings* result = nullptr;
 
-    if (waitResult == WAIT_OBJECT_0)
+    if (waitResult == WAIT_OBJECT_0 || waitResult == WAIT_ABANDONED)
     {
         result = new CameraSettings(*m_settings);
+        ReleaseMutex(m_hBusyMutex);
     }
-
-    ReleaseMutex(m_hBusyMutex);
+    else
+    {
+        LOGWARN(L"Camera::GetSettings: timed out waiting for the settings lock");
+    }
 
     return result;
 }
@@ -810,9 +836,13 @@ Camera::GetProperty(Property id) const
         {
             result = existing->Clone();
         }
-    }
 
-    ReleaseMutex(m_hBusyMutex);
+        ReleaseMutex(m_hBusyMutex);
+    }
+    else
+    {
+        LOGWARN(L"Camera::GetProperty(x%04x): timed out waiting for the settings lock", (int)id);
+    }
 
     return result;
 }

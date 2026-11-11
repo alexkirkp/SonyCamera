@@ -145,6 +145,13 @@ CameraSettings::GetPropertyValue(Property id) const
 {
     CameraProperty* p = GetProperty(id);
 
+    if (!p)
+    {
+        LOGWARN(L"GetPropertyValue: property x%04x not available", (int)id);
+
+        return nullptr;
+    }
+
     if (p->GetInfo()->GetType() != DataType::UNKNOWN)
     {
         return p->GetCurrentValue();

@@ -90,7 +90,8 @@ doCapture(CameraTaskInfo& info)
 
     // If auto-focus is enabled, we should add a short pause between 1/2 down and full down to let it
     // do its thing
-    bool isManualFocus = cs->GetProperty(Property::FocusMode)->GetCurrentValue()->GetUINT16() == 1;
+    CameraProperty* focusMode = cs ? cs->GetProperty(Property::FocusMode) : nullptr;
+    bool isManualFocus = focusMode && focusMode->GetCurrentValue() && focusMode->GetCurrentValue()->GetUINT16() == 1;
     double exposureTime = ((TakePhotoTaskParams*)info.pTask->GetParam1())->exposureTime;
 
     info.pCamera->SetCaptureStatus(CaptureStatus::Capturing);
@@ -138,7 +139,15 @@ doCapture(CameraTaskInfo& info)
 bool
 isImageReady(CameraSettings* cs)
 {
-    CameraProperty* bufferStatus = cs->GetProperty(Property::PhotoBufferStatus);
+    CameraProperty* bufferStatus = cs ? cs->GetProperty(Property::PhotoBufferStatus) : nullptr;
+
+    if (!bufferStatus || !bufferStatus->GetCurrentValue())
+    {
+        LOGWARN(L"  PhotoBufferStatus not reported");
+
+        return false;
+    }
+
     DWORD value = bufferStatus->GetCurrentValue()->GetUINT16();
     bool imageReady = false;
 

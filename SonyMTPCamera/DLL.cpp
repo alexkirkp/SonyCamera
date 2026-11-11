@@ -201,9 +201,12 @@ OpenDeviceEx(LPWSTR deviceName, DWORD flags)
                     // It will be useful to dump a list of camera properties
                     std::unique_ptr<CameraSettings> cs(camera->GetSettings());
 
-                    for (auto propIt = cs->cbegin(); propIt != cs->cend(); propIt++)
+                    if (cs)
                     {
-                        LOGDEBUG(L"Camera property: %04x = %s", (*propIt).first, (*propIt).second->ToString().c_str());
+                        for (auto propIt = cs->cbegin(); propIt != cs->cend(); propIt++)
+                        {
+                            LOGDEBUG(L"Camera property: %04x = %s", (*propIt).first, (*propIt).second->ToString().c_str());
+                        }
                     }
                 }
                 else
@@ -594,6 +597,15 @@ static bool NudgePropertyAndWait(Camera* camera, CameraProperty* desired, bool u
 
     std::unique_ptr<CameraProperty> current(camera->GetProperty(desired->GetId()));
 
+    if (!current)
+    {
+        LOGWARN(L"Nudge: property x%04x is not available", desired->GetId());
+
+        *compareResult = 0;
+
+        return false;
+    }
+
     // This will nudge the property in hopefully the correct direction
     LOGTRACE(L"Property x%04x is set to %s, nudging %s toward %s", desired->GetId(), current->GetCurrentValue()->ToString().c_str(), val.ToString().c_str(), desired->GetCurrentValue()->ToString().c_str());
     SetPropertyTaskParams params(desired->GetId(), val);
@@ -610,6 +622,15 @@ static bool NudgePropertyAndWait(Camera* camera, CameraProperty* desired, bool u
     {
         Sleep(50);
         std::unique_ptr<CameraProperty> latest(camera->GetProperty(desired->GetId()));
+
+        if (!latest)
+        {
+            LOGWARN(L"Nudge: property x%04x disappeared", desired->GetId());
+
+            *compareResult = 0;
+
+            return false;
+        }
 
         changed = latest->Compare(current.get());
         *compareResult = latest->Compare(desired);
@@ -631,7 +652,19 @@ GetAvailablePropertyValues(HANDLE hCamera, Camera* camera, Property propertyId, 
     PropertyValue* val;
     PropertyValue* desiredVal;
     std::unique_ptr<CameraSettings> cs(camera->GetSettings());
+
+    if (!cs)
+    {
+        throw CameraException(L"Unable to learn property values, could not fetch camera settings");
+    }
+
     CameraProperty* current = cs->GetProperty(propertyId);
+
+    if (!current)
+    {
+        throw CameraException(L"Unable to learn property values, the camera does not have that property");
+    }
+
     CameraProperty* desired = current->Clone();
 
     switch (current->GetInfo()->GetType())
@@ -681,7 +714,14 @@ GetAvailablePropertyValues(HANDLE hCamera, Camera* camera, Property propertyId, 
 
     std::unique_ptr<CameraSettings> updated(camera->GetSettings());
 
-    current = updated->GetProperty(propertyId);
+    current = updated ? updated->GetProperty(propertyId) : nullptr;
+
+    if (!current)
+    {
+        delete desired;
+
+        throw CameraException(L"Unable to learn property values, the property is no longer available");
+    }
 
     bool adjusted;
     int expectedCompareResult = current->Compare(desired);
@@ -689,7 +729,14 @@ GetAvailablePropertyValues(HANDLE hCamera, Camera* camera, Property propertyId, 
     do
     {
         std::unique_ptr<CameraSettings> loop_cs(camera->GetSettings());
-        val = loop_cs->GetPropertyValue(propertyId);
+        val = loop_cs ? loop_cs->GetPropertyValue(propertyId) : nullptr;
+
+        if (!val)
+        {
+            delete desired;
+
+            throw CameraException(L"Unable to learn property values, the property value is no longer available");
+        }
 
         switch (current->GetInfo()->GetType())
         {
@@ -1045,6 +1092,13 @@ GetPropertyList(HANDLE hCamera, DWORD* list, DWORD* listSize)
     {
         std::unique_ptr<CameraSettings> cs(camera->GetSettings());
 
+        if (!cs)
+        {
+            LOGWARN(L"Out: GetPropertyList(x%p, ...) - unable to fetch camera settings", hCamera);
+
+            return ERROR_CAN_NOT_COMPLETE;
+        }
+
         if (!list)
         {
             if (!listSize)
@@ -1263,12 +1317,12 @@ SetPropertyValue(HANDLE hCamera, DWORD propertyId, DWORD value)
 
         std::unique_ptr<CameraProperty> v(camera->GetProperty((Property)propertyId));
 
-        LOGINFO(L"Property x%04x = %s", propertyId, v->ToString().c_str());
-
         PropertyValue val;
 
         if (v)
         {
+            LOGINFO(L"Property x%04x = %s", propertyId, v->ToString().c_str());
+
             // Try to just do it
             switch (v->GetInfo()->GetType())
             {
@@ -1353,7 +1407,7 @@ SetPropertyValue(HANDLE hCamera, DWORD propertyId, DWORD value)
         }
         else
         {
-            LOGTRACE(L"Out: SetPropertyValue - unable to find property x%08x", propertyId);
+            LOGWARN(L"Out: SetPropertyValue - unable to find property x%04x", propertyId);
 
             return ERROR_NOT_FOUND;
         }
@@ -1388,6 +1442,8 @@ GetSinglePropertyValue(HANDLE hCamera, DWORD propertyId, PROPERTYVALUE* value)
         }
         else
         {
+            LOGWARN(L"Out: GetSinglePropertyValue - unable to find property x%04x", propertyId);
+
             return ERROR_NOT_FOUND;
         }
     }
@@ -1412,6 +1468,13 @@ GetAllPropertyValues(HANDLE hCamera, PROPERTYVALUE* values, DWORD* count)
     try
     {
         std::unique_ptr<CameraSettings> cs(camera->GetSettings());
+
+        if (!cs)
+        {
+            LOGWARN(L"Out: GetAllPropertyValues(x%p, ...) - unable to fetch camera settings", hCamera);
+
+            return ERROR_CAN_NOT_COMPLETE;
+        }
 
         if (!values)
         {
