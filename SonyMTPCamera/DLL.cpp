@@ -189,6 +189,8 @@ OpenDeviceEx(LPWSTR deviceName, DWORD flags)
                 continue;
             }
 
+            bool initFailed = false;
+
             try
             {
                 Locker lock(camera);
@@ -213,10 +215,7 @@ OpenDeviceEx(LPWSTR deviceName, DWORD flags)
                 {
                     LOGERROR(L"Unable to initialize camera");
                     camera->Close();
-                    GetCameraManager()->RemoveCamera(result);
-                    delete camera;
-                    camera = nullptr;
-                    result = INVALID_HANDLE_VALUE;
+                    initFailed = true;
                 }
             }
             catch (CameraException & gfe)
@@ -224,6 +223,12 @@ OpenDeviceEx(LPWSTR deviceName, DWORD flags)
                 LOGERROR(L"Exception initializing camera: %s", gfe.GetMessage().c_str());
 
                 camera->Close();
+                initFailed = true;
+            }
+
+            // The Locker is out of scope here, so it is safe to delete the camera
+            if (initFailed)
+            {
                 GetCameraManager()->RemoveCamera(result);
                 delete camera;
                 camera = nullptr;
@@ -264,13 +269,20 @@ CloseDevice(HANDLE hCamera)
 
     try
     {
-        Locker lock(camera);
+        bool closed = false;
 
-        CloseCameraTask task(hCamera);
+        {
+            Locker lock(camera);
 
-        task.Run(camera);
+            CloseCameraTask task(hCamera);
 
-        if (task.Closed())
+            task.Run(camera);
+
+            closed = task.Closed();
+        }
+
+        // The Locker is out of scope here, so it is safe to delete the camera
+        if (closed)
         {
             // This happens if the device is fully closed
             LOGINFO(L"Removing device x%p as it is no longer open", hCamera);

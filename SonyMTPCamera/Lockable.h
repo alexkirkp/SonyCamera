@@ -5,7 +5,7 @@ class Lockable
 {
 public:
     Lockable();
-    ~Lockable();
+    virtual ~Lockable();
 
     bool Lock(DWORD timeout);
     void Unlock();

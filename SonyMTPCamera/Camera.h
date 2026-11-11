@@ -57,7 +57,7 @@ class Camera : public Lockable
 {
 public:
     Camera(Device* device);
-    ~Camera();
+    virtual ~Camera();
 
     const std::wstring GetId() const;
     HANDLE Open();

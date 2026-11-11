@@ -41,7 +41,7 @@ class CameraTask
 {
 public:
     CameraTask(std::wstring name);
-    ~CameraTask();
+    virtual ~CameraTask();
 
     bool Step(CameraTaskInfo& info);
     void SetResult(void* result);

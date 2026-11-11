@@ -25,7 +25,7 @@ public:
     Device(const Device &rhs);
 
     /* Destructor */
-    ~Device();
+    virtual ~Device();
 
 //    virtual Device* Clone() = 0;
 
