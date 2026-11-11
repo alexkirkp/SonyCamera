@@ -14,6 +14,7 @@ static const DWORD EXIF_IDENT = 0x002a4949;
 static const DWORD JPEG_IDENT = 0xe1ffd8ff;
 
 std::wstring Image::s_savePath;
+bool Image::s_saveFailed = false;
 
 Image::Image(ObjectInfo* info, Message* message)
     : MessageReader(message, true), // image data can be huge: move it, don't copy it
@@ -640,7 +641,8 @@ Image::SaveFile(std::wstring path)
         path = s_savePath;
     }
 
-    if (path.empty())
+    // A save folder that couldn't be created is not retried (or re-logged) until the DLL is reloaded
+    if (path.empty() && !s_saveFailed)
     {
         std::wostringstream builder;
 
@@ -704,13 +706,14 @@ Image::SaveFile(std::wstring path)
                     {
                         // Cannot create directory (and doesn't already exist)
                         LOGERROR(L"Unable to create directory '%s': Error = 0x%x", path_builder.str().c_str(), err);
-                        path_builder.clear();
+                        // Give up: the image is still delivered to the host, just not saved
+                        s_saveFailed = true;
                     }
                 }
                 else {
                     s_savePath = path_builder.str();
                 }
-            } while (s_savePath.empty() && attempt < 20);
+            } while (s_savePath.empty() && !s_saveFailed && attempt < 20);
 
             path = s_savePath;
         }

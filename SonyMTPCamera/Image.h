@@ -74,4 +74,5 @@ private:
     DWORD m_focusPosition = 0xffff;
 
     static std::wstring s_savePath;
+    static bool s_saveFailed;
 };
