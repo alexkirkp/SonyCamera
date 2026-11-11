@@ -677,9 +677,7 @@ Camera::StartCapture(double duration, OutputMode outputMode, DWORD /*flags*/)
     if (!v || v->GetUINT16() != up.GetUINT16())
     {
         LOGWARN(L"ShutterHalfDown is %s, clearing", v ? L"set" : L"unreported");
-        PropertyValue halfUp((WORD)1);
-
-        SetProperty(Property::ShutterHalfDown, &halfUp);
+        SetProperty(Property::ShutterHalfDown, &up);
 
         // Re-fetch settings
         DoRefreshProperties();
