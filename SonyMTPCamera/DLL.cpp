@@ -1,5 +1,7 @@
 ﻿#include "pch.h"
+#include <mutex>
 #include "SonyMTPCamera.h"
+#include "dll.h"
 #include <Ole2.h>
 #include <algorithm>
 #include "DeviceManager.h"
@@ -25,22 +27,72 @@ constexpr auto MAX_EXPOSURE_SAME_COUNT = 20;
 
 static DeviceManager* deviceManager = nullptr;
 
+static std::recursive_mutex initMutex;
+static bool initialised = false;
+
+// Idempotent and thread-safe; called on first use of the API rather than from DllMain.
 void
 Init()
 {
-    LOGINFO(L"Init() - Starting up");
+    std::lock_guard<std::recursive_mutex> guard(initMutex);
 
-    if (deviceManager == nullptr)
+    if (initialised)
     {
-        LOGINFO(L"GetDeviceManager: First time thru, creating new DeviceManager singleton");
-        deviceManager = new DeviceManager();
+        return;
     }
+
+    registry.Open();
+    logger.SetLogFilename(registry.GetString(L"", L"Logfile Name", L""));
+    logger.SetLogLevel((Logger::LogLevel)registry.GetDWORD(L"", L"Log Level", (DWORD)Logger::LogLevel::Error));
+
+    {
+        Version* version = ResourceLoader::GetVersion();
+
+        if (!version)
+        {
+            version = new Version(L"**Not Found**", L"No Version");
+        }
+
+        bool isWin64 = false;
+
+#if _WIN64
+        isWin64 = true;
+#endif
+
+        LOGERROR(L"================================================================");
+        LOGERROR(L"DLL Starting up (%s v%s) - %d-bit", version->GetProductName().c_str(), version->GetVersion().c_str(), isWin64 ? 64 : 32);
+
+#ifdef DEBUG
+        LOGERROR(L"DEBUG Build");
+#endif
+
+        delete version;
+    }
+
+    // Set the Auto File Save flag for legacy users
+    registry.SetDWORDDefault(L"", L"File Auto Save", registry.GetString(L"", L"File Save Path", L"").size() > 0);
+    registry.Close();
+
+    // Ensure the cameras we know about are in the registry, otherwise the code will fail to find any viable candidates
+    CameraManager::SetupSupportedDevices();
+
+    LOGINFO(L"Init() - Creating DeviceManager");
+    deviceManager = new DeviceManager();
+
+    initialised = true;
 }
 
 void
 Shutdown()
 {
-    LOGINFO(L"Shutdown() - Shutting down");
+    std::lock_guard<std::recursive_mutex> guard(initMutex);
+
+    if (!initialised)
+    {
+        return;
+    }
+
+    LOGINFO(L"DLL Shutting Down");
 
     RemoveCameraManager();
 
@@ -50,6 +102,17 @@ Shutdown()
         delete deviceManager;
         deviceManager = nullptr;
     }
+
+    Logger::SetLogFilename(L"");
+    initialised = false;
+}
+
+static DeviceManager*
+GetDeviceManager()
+{
+    Init();
+
+    return deviceManager;
 }
 
 static LPWSTR
@@ -145,9 +208,9 @@ GetDeviceCount()
 {
     LOGTRACE(L"In: GetDeviceCount()");
 
-    deviceManager->RefreshDevices();
+    GetDeviceManager()->RefreshDevices();
 
-    DWORD count = deviceManager->GetFilteredDevices().size();
+    DWORD count = GetDeviceManager()->GetFilteredDevices().size();
 
     LOGTRACE(L"Out: GetDeviceCount() = %d", count);
 
@@ -166,7 +229,7 @@ OpenDeviceEx(LPWSTR deviceName, DWORD flags)
     LOGTRACE(L"In: OpenDeviceEx(%s, x%p)", deviceName, flags);
 
     HANDLE result = INVALID_HANDLE_VALUE;
-    std::list<Device*> deviceList = (flags & OPENDEVICEEX_OPEN_ANY_DEVICE) ? deviceManager->GetAllDevices(false) : deviceManager->GetFilteredDevices();
+    std::list<Device*> deviceList = (flags & OPENDEVICEEX_OPEN_ANY_DEVICE) ? GetDeviceManager()->GetAllDevices(false) : GetDeviceManager()->GetFilteredDevices();
     std::wstring deviceId = deviceName;
 
     LOGINFO(L"OpenDevice: Found %d devices... iterating...", deviceList.size());
@@ -1019,7 +1082,7 @@ GetPortableDeviceCount()
 {
     LOGTRACE(L"In: GetPortableDeviceCount()");
 
-    DWORD result = deviceManager->GetAllDevices(true).size();
+    DWORD result = GetDeviceManager()->GetAllDevices(true).size();
 
     LOGTRACE(L"Out: GetPortableDeviceCount() - returning %d", result);
 
@@ -1038,7 +1101,7 @@ GetPortableDeviceInfo(DWORD offset, PORTABLEDEVICEINFO* pdinfo)
         return ERROR_INCORRECT_SIZE;
     }
 
-    std::list<Device*> deviceList = deviceManager->GetAllDevices(false);
+    std::list<Device*> deviceList = GetDeviceManager()->GetAllDevices(false);
 
     if (offset >= deviceList.size())
     {
@@ -1078,8 +1141,8 @@ GetSupportedDeviceCount()
     LOGTRACE(L"In: GetSupportedDeviceCount()");
 
     // Refresh before getting list
-    deviceManager->GetAllDevices(true);
-    DWORD result = deviceManager->GetFilteredDevices().size();
+    GetDeviceManager()->GetAllDevices(true);
+    DWORD result = GetDeviceManager()->GetFilteredDevices().size();
 
     LOGTRACE(L"Out: GetSupportedDeviceCount() - returning %d", result);
 
@@ -1098,7 +1161,7 @@ GetSupportedDeviceInfo(DWORD offset, PORTABLEDEVICEINFO* pdinfo)
         return ERROR_INCORRECT_SIZE;
     }
 
-    std::list<Device*> deviceList = deviceManager->GetFilteredDevices();
+    std::list<Device*> deviceList = GetDeviceManager()->GetFilteredDevices();
 
     if (offset >= deviceList.size())
     {
@@ -1781,6 +1844,8 @@ IMPEXP DWORD GetLensCount()
 {
     DWORD count = 0;
 
+    Init();
+
     // Info about the lenses is in registry
     registry.Open();
 
@@ -1803,6 +1868,8 @@ IMPEXP DWORD GetLensCount()
 
 IMPEXP HRESULT GetLensInfo(DWORD offset, LENSINFO* plinfo)
 {
+    Init();
+
     // Info about the lenses is in registry
     registry.Open();
 

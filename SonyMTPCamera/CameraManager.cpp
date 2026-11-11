@@ -5,6 +5,8 @@
 #include "Registry.h"
 #include "CameraDefaults.h"
 #include "ShippedDefaults.h"
+#include "dll.h"
+
 static CameraManager* cameraManager = nullptr;
 
 CameraManager::CameraManager()
@@ -25,7 +27,6 @@ CameraManager::~CameraManager()
     }
 }
 
-void
 void
 CameraManager::SetupSupportedDevices()
 {
@@ -263,6 +264,9 @@ CameraManager::GetCameraForHandle(HANDLE hCamera)
 CameraManager*
 GetCameraManager()
 {
+    // First use of the API initialises the DLL (nothing is done in DllMain)
+    Init();
+
     if (cameraManager == nullptr)
     {
         LOGINFO(L"GetCameraManager: First time thru, creating new CameraManager singleton");
