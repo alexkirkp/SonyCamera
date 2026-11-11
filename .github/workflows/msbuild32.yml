@@ -29,10 +29,10 @@ jobs:
     runs-on: windows-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
 
     - name: Add MSBuild to PATH
-      uses: microsoft/setup-msbuild@v2
+      uses: microsoft/setup-msbuild@v3
 
     - name: Restore NuGet packages
       working-directory: ${{env.GITHUB_WORKSPACE}}
@@ -44,7 +44,7 @@ jobs:
       run: msbuild /m /p:Configuration=${{env.BUILD_CONFIGURATION}} -p:Platform=x64 -t:SonyMTPCamera ${{env.SOLUTION_FILE_PATH}}
 
     - name: Upload SonyMTPCamera.dll
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: SonyMTPCamera-x64
         path: x64/Release/SonyMTPCamera.dll
