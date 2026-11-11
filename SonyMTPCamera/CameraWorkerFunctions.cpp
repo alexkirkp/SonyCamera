@@ -67,7 +67,12 @@ StateResult
 setProperty(CameraTaskInfo& info)
 {
     SetPropertyTaskParams* params = (SetPropertyTaskParams*)info.pTask->GetParam1();
-    info.pCamera->SetProperty(params->id, &params->value);
+    if (!info.pCamera->SetProperty(params->id, &params->value))
+    {
+        LOGWARN(L"setProperty: camera rejected write of property x%04x", (int)params->id);
+
+        return StateResult::Fail;
+    }
 
     return StateResult::Success;
 }

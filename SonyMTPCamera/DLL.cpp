@@ -664,7 +664,7 @@ CancelCapture(HANDLE hCamera, IMAGEINFO* /*info*/)
     return ERROR_SUCCESS;
 }
 
-static bool NudgePropertyAndWait(Camera* camera, CameraProperty* desired, bool up, int* compareResult)
+static bool NudgePropertyAndWait(Camera* camera, CameraProperty* desired, bool up, int* compareResult, bool* rejected = nullptr)
 {
     PropertyValue val;
     DWORD value = up ? 1 : -1;
@@ -716,7 +716,19 @@ static bool NudgePropertyAndWait(Camera* camera, CameraProperty* desired, bool u
     SetPropertyTaskParams params(desired->GetId(), val);
     SetPropertyTask task(&params);
 
-    task.Run(camera);
+    if (!task.Run(camera))
+    {
+        LOGWARN(L"Nudge: camera rejected nudge of property x%04x", desired->GetId());
+
+        if (rejected)
+        {
+            *rejected = true;
+        }
+
+        *compareResult = 0;
+
+        return false;
+    }
 
     // Now wait a bit to see if it updates - wait no more than 2 seconds
     int count = 0;
@@ -1529,10 +1541,19 @@ SetPropertyValue(HANDLE hCamera, DWORD propertyId, DWORD value)
                         up = compare > 0;
                     }
 
+                    bool rejected = false;
+
                     do
                     {
-                        adjusted = NudgePropertyAndWait(camera, target.get(), up, &compareResult);
+                        adjusted = NudgePropertyAndWait(camera, target.get(), up, &compareResult, &rejected);
                     } while (adjusted && compareResult == compare);
+
+                    if (rejected)
+                    {
+                        LOGWARN(L"Out: SetPropertyValue - camera rejected adjusting property x%04x", propertyId);
+
+                        return ERROR_CAN_NOT_COMPLETE;
+                    }
                 }
             }
 

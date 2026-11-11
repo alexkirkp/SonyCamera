@@ -939,10 +939,19 @@ MTPDevice::Send(Message* out)
     // This method returns a message, so we need to ensure it's deleted
     Message *in = InternalSend(method, out);
 
+    // A missing response (never read) or any response code other than OK means the camera
+    // did not accept the command
+    bool accepted = in && in->IsSuccess();
+
+    if (!accepted)
+    {
+        LOGWARN(L"MTPDevice::Send: command x%04x not accepted, response x%04x", out->GetCommand(), in ? in->GetCommand() : 0);
+    }
+
     delete in;
 //    LOGTRACE(L"Out: MTPDevice::Send");
 
-    return true;
+    return accepted;
 }
 
 Message*

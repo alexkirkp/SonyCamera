@@ -231,9 +231,16 @@ LibUSBKDevice::GetRegistryPath()
 bool
 LibUSBKDevice::Send(Message* out)
 {
-    Receive(out);
+    std::unique_ptr<Message> in(Receive(out));
 
-    return true;
+    bool accepted = in && in->IsSuccess();
+
+    if (!accepted)
+    {
+        LOGWARN(L"LibUSBKDevice::Send: command x%04x not accepted, response x%04x", out->GetCommand(), in ? in->GetCommand() : 0);
+    }
+
+    return accepted;
 }
 
 Message*
