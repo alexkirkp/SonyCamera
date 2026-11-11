@@ -14,7 +14,7 @@ refreshSettings(CameraTaskInfo& info)
 {
     try
     {
-        info.pCamera->RefreshSettings((int)info.pTask->GetParam1() != 0 ? true : false);
+        info.pCamera->RefreshSettings(info.pTask->GetParam1() != nullptr);
     }
     catch (CameraException& ex)
     {

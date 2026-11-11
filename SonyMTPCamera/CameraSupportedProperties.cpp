@@ -102,7 +102,7 @@ CameraSupportedProperties::AsString()
 DWORD
 CameraSupportedProperties::Size()
 {
-    return m_lista.size() + m_listb.size();
+    return static_cast<DWORD>(m_lista.size() + m_listb.size());
 }
 
 std::list<Property>

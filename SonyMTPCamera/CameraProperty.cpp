@@ -386,7 +386,7 @@ CameraProperty::Slurp(BYTE* data, DWORD offset)
 }
 
 PropertyValue*
-CameraProperty::ReadData(BYTE* data, DWORD &offset, DataType type)
+CameraProperty::ReadData(BYTE* data, DWORD &offset, DataType /*type*/)
 {
     PropertyValue* result;
 
@@ -883,7 +883,7 @@ std::wstring
 StringLookupProperty::AsString(PropertyValue* in) const
 {
     // Currently this only works for unsigned 8, 16, 32 bit values
-    DWORD lookup = -1;
+    DWORD lookup = static_cast<DWORD>(-1);
     std::wstring result = L"<unable to lookup>";
 
     switch (m_info->GetType())

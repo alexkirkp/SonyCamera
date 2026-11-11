@@ -1,7 +1,10 @@
 #pragma once
 #include "MessageReader.h"
 #include "ObjectInfo.h"
+#pragma warning(push)
+#pragma warning(disable : 4251) // vendored LibRaw header: std types in exported classes
 #include "libraw/libraw.h"
+#pragma warning(pop)
 #include "libjpeg//turbojpeg.h"
 #include <string>
 

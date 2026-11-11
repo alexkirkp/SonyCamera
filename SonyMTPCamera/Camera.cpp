@@ -279,11 +279,11 @@ Camera::LoadFakeProperties(CameraSettings* settings) const
     CameraPropertyFactory f;
 
     CameraProperty* p = f.Create(Property::BatteryTemperature);
-    p->SetCurrentValue(new PropertyValue((INT16)0xffff));
+    p->SetCurrentValue(new PropertyValue(static_cast<INT16>(-1)));
 
     PropertyInfo* inf = new PropertyInfo();
 
-    inf->SetDefault(new PropertyValue((INT16)0xffff));
+    inf->SetDefault(new PropertyValue(static_cast<INT16>(-1)));
     inf->SetId(Property::BatteryTemperature);
     inf->SetType(DataType::INT16);
     inf->SetFormMode(FormMode::NONE);
@@ -552,7 +552,7 @@ Camera::DoRefreshProperties()
 }
 
 bool
-Camera::StartCapture(double duration, OutputMode outputMode, DWORD flags)
+Camera::StartCapture(double duration, OutputMode outputMode, DWORD /*flags*/)
 {
     LOGTRACE(L"In: Camera::StartCapture(duration = %f, output = %d)", duration,(DWORD)outputMode);
 
@@ -663,9 +663,9 @@ Camera::StartCapture(double duration, OutputMode outputMode, DWORD flags)
     if (!v || v->GetUINT16() != up.GetUINT16())
     {
         LOGWARN(L"ShutterHalfDown is %s, clearing", v ? L"set" : L"unreported");
-        PropertyValue up((WORD)1);
+        PropertyValue halfUp((WORD)1);
 
-        SetProperty(Property::ShutterHalfDown, &up);
+        SetProperty(Property::ShutterHalfDown, &halfUp);
 
         // Re-fetch settings
         DoRefreshProperties();
@@ -944,10 +944,9 @@ Camera::GetCapturedImage()
     if (image)
     {
         // Update a couple of settings based on some EXIF data read from the image
-        DWORD waitResult = WaitForSingleObject(m_hBusyMutex, 1000);
-        CameraSettings* result = nullptr;
+        DWORD exifWait = WaitForSingleObject(m_hBusyMutex, 1000);
 
-        if (waitResult == WAIT_OBJECT_0)
+        if (exifWait == WAIT_OBJECT_0)
         {
             LOGTRACE(L"Updating temperature and focus properties from EXIF");
 

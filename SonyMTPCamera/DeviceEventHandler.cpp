@@ -201,7 +201,7 @@ DeviceEventHandler::NotifyDeviceRemoved()
 }
 
 DWORD CALLBACK
-DeviceEventHandler::OnPnpNotification(HCMNOTIFICATION notification, PVOID context, CM_NOTIFY_ACTION action, PCM_NOTIFY_EVENT_DATA eventData, DWORD eventDataSize)
+DeviceEventHandler::OnPnpNotification(HCMNOTIFICATION /*notification*/, PVOID context, CM_NOTIFY_ACTION action, PCM_NOTIFY_EVENT_DATA eventData, DWORD /*eventDataSize*/)
 {
     DeviceEventHandler* handler = (DeviceEventHandler*)context;
 

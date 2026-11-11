@@ -23,7 +23,7 @@ CameraTask::Run(Camera* camera)
     pWorker->QueueTask(this, waiter);
 
     // Wait for task to complete
-    DWORD waitResult = WaitForSingleObject(waiter, INFINITE);
+    WaitForSingleObject(waiter, INFINITE);
 
     CloseHandle(waiter);
     waiter = INVALID_HANDLE_VALUE;
@@ -85,7 +85,7 @@ RefreshPropertiesTask::RefreshPropertiesTask(bool refreshFakePropertiesToo)
         },
     };
 
-    SetParam1((void *)(refreshFakePropertiesToo ? 1 : 0));
+    SetParam1(reinterpret_cast<void*>(static_cast<INT_PTR>(refreshFakePropertiesToo ? 1 : 0)));
     SetSteps(steps);
 }
 

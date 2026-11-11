@@ -74,7 +74,7 @@ protected:
 
 private:
     std::wstring name;
-    std::unordered_map<int, StateStepInfo> steps;
+    std::unordered_map<int, StateStepInfo> m_steps;
     void* result = nullptr;
     CameraTaskStatus status;
     void* param1 = nullptr;

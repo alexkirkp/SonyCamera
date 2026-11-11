@@ -191,19 +191,6 @@ RenderProperty(Property id, const CameraProperty* property, PROPERTYVALUE* outpu
     }
 }
 
-static Camera*
-FindCamera(HANDLE hCamera)
-{
-    Camera *result = GetCameraManager()->GetCameraForHandle(hCamera);
-
-    if (!result)
-    {
-        LOGWARN(L"FindCamera: Unable to find camera for handle x%p", hCamera);
-    }
-
-    return result;
-}
-
 DWORD
 GetDeviceCount()
 {
@@ -211,7 +198,7 @@ GetDeviceCount()
 
     GetDeviceManager()->RefreshDevices();
 
-    DWORD count = GetDeviceManager()->GetFilteredDevices().size();
+    DWORD count = static_cast<DWORD>(GetDeviceManager()->GetFilteredDevices().size());
 
     LOGTRACE(L"Out: GetDeviceCount() = %d", count);
 
@@ -642,7 +629,7 @@ GetCaptureStatus(HANDLE hCamera, IMAGEINFO* info)
 }
 
 HRESULT
-CancelCapture(HANDLE hCamera, IMAGEINFO* info)
+CancelCapture(HANDLE hCamera, IMAGEINFO* /*info*/)
 {
     LOGTRACE(L"In: CancelCapture(x%08p)", hCamera);
 
@@ -728,7 +715,6 @@ static bool NudgePropertyAndWait(Camera* camera, CameraProperty* desired, bool u
     // Now wait a bit to see if it updates - wait no more than 2 seconds
     int count = 0;
     int changed = 0;
-    CameraProperty* latest = nullptr;
 
     do
     {
@@ -1083,7 +1069,7 @@ GetPortableDeviceCount()
 {
     LOGTRACE(L"In: GetPortableDeviceCount()");
 
-    DWORD result = GetDeviceManager()->GetAllDevices(true).size();
+    DWORD result = static_cast<DWORD>(GetDeviceManager()->GetAllDevices(true).size());
 
     LOGTRACE(L"Out: GetPortableDeviceCount() - returning %d", result);
 
@@ -1143,7 +1129,7 @@ GetSupportedDeviceCount()
 
     // Refresh before getting list
     GetDeviceManager()->GetAllDevices(true);
-    DWORD result = GetDeviceManager()->GetFilteredDevices().size();
+    DWORD result = static_cast<DWORD>(GetDeviceManager()->GetFilteredDevices().size());
 
     LOGTRACE(L"Out: GetSupportedDeviceCount() - returning %d", result);
 
@@ -1246,7 +1232,7 @@ GetPropertyList(HANDLE hCamera, DWORD* list, DWORD* listSize)
             return ERROR_INVALID_PARAMETER;
         }
 
-        if (*listSize < cs->size())
+        if (*listSize < static_cast<DWORD>(cs->size()))
         {
             LOGWARN(L"Out: GetPropertyList(x%p, ...) - buffer too small (%d < %d)", hCamera, *listSize, (DWORD)cs->size());
 
@@ -1308,7 +1294,7 @@ GetPropertyDescriptor(HANDLE hCamera, DWORD propertyId, PROPERTYDESCRIPTOR* desc
             descriptor->type = (WORD)info->GetType();
             descriptor->flags = (WORD)((WORD)info->GetAccess() | ((WORD)info->GetSonySpare() << 8));
             descriptor->name = exportString(name.empty() ? L"?" : name);
-            descriptor->valueCount = info->GetFormMode() == FormMode::ENUMERATION ? info->GetEnumeration().size() : 0;
+            descriptor->valueCount = info->GetFormMode() == FormMode::ENUMERATION ? static_cast<DWORD>(info->GetEnumeration().size()) : 0;
 
             #ifdef DEBUG
                 LOGTRACE(L"Out: GetPropertyDescriptor(x%p, x%04x, ...)", hCamera, propertyId);
@@ -1649,7 +1635,7 @@ GetAllPropertyValues(HANDLE hCamera, PROPERTYVALUE* values, DWORD* count)
 }
 
 HRESULT
-SetExposureTime(HANDLE hCamera, float desired, PROPERTYVALUE* valueOut)
+SetExposureTime(HANDLE hCamera, float desired, PROPERTYVALUE* /*valueOut*/)
 {
     CameraLease camera = GetCameraManager()->GetCameraForHandle(hCamera);
     Property propertyId = Property::ShutterSpeed;
@@ -1771,7 +1757,7 @@ IMPEXP DWORD GetLensCount()
         lensPath << L"Lenses\\" << manufacturer;
 
         std::list<std::wstring> lenses = registry.GetChildKeys(lensPath.str());
-        count += lenses.size();
+        count += static_cast<DWORD>(lenses.size());
     }
 
     registry.Close();
@@ -1786,7 +1772,7 @@ IMPEXP HRESULT GetLensInfo(DWORD offset, LENSINFO* plinfo)
     // Info about the lenses is in registry
     registry.Open();
 
-    int index = 0;
+    DWORD index = 0;
     bool populated = false;
     std::list<std::wstring> manufacturers = registry.GetChildKeys(L"Lenses");
 
@@ -1878,7 +1864,7 @@ IMPEXP HRESULT SetAttachedLens(HANDLE hCamera, LPWSTR lensId)
 }
 
 HRESULT
-TestFunc(HANDLE hCamera, DWORD value)
+TestFunc(HANDLE /*hCamera*/, DWORD value)
 {
     LOGERROR(L"Test marker %d", value);
 

@@ -24,7 +24,7 @@ CameraWorker::~CameraWorker()
 
     // Wait for run to exit
     DWORD exitCode = 0;
-    BOOL ret = GetExitCodeThread(threadHandle, &exitCode);
+    GetExitCodeThread(threadHandle, &exitCode);
 
     int waitCount = 0;
 
@@ -41,7 +41,7 @@ CameraWorker::~CameraWorker()
     if (exitCode == STILL_ACTIVE)
     {
         LOGERROR(L"Camera handler thread would not exit, terminating with prejudice");
-        TerminateThread(threadHandle, -1);
+        TerminateThread(threadHandle, static_cast<DWORD>(-1));
     }
 
 /*    if (currentTask)

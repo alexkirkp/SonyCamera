@@ -283,7 +283,7 @@ Registry::SetString(HKEY hk, std::wstring value, std::wstring setting)
 {
     std::lock_guard<std::recursive_mutex> guard(m_mutex);
 
-    return RegSetValueEx(hk, value.c_str(), 0, REG_SZ, (BYTE*)setting.c_str(), setting.length() * sizeof(wchar_t)) == ERROR_SUCCESS;
+    return RegSetValueEx(hk, value.c_str(), 0, REG_SZ, (BYTE*)setting.c_str(), static_cast<DWORD>(setting.length() * sizeof(wchar_t))) == ERROR_SUCCESS;
 }
 
 bool

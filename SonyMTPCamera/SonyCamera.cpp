@@ -237,8 +237,8 @@ SonyCamera::SetProperty(const Property id, PropertyValue* value)
 
         memset(txdata, 0, size);
 
-        value->Write(txdata, size);
-        tx->SetData(txdata, size);
+        value->Write(txdata, static_cast<DWORD>(size));
+        tx->SetData(txdata, static_cast<DWORD>(size));
 
         if (m_device->Send(tx))
         {
@@ -284,7 +284,7 @@ SonyCamera::SetFocus(UINT16 focusPosition)
 {
     DeviceInfo di = GetDeviceInfo();
     UINT16 maxStepSize = m_focusSteps.rbegin()->first;
-    UINT16 focusDiff = abs(m_lastFocusPosition - focusPosition);
+    UINT16 focusDiff = static_cast<UINT16>(abs(m_lastFocusPosition - focusPosition));
 
     if (m_currentFocusPosition < 0 || m_currentFocusPosition > GetFocusLimit()
         || di.GetFocusStartMode() == FocusStartMode::RESET_EVERY_TIME
@@ -294,7 +294,7 @@ SonyCamera::SetFocus(UINT16 focusPosition)
     }
 
     m_lastFocusPosition = m_currentFocusPosition;
-    m_lastFocusDiff = abs(m_currentFocusPosition - focusPosition);
+    m_lastFocusDiff = static_cast<UINT16>(abs(m_currentFocusPosition - focusPosition));
 
     if (abs(m_currentFocusPosition - focusPosition) <= m_focusSteps.begin()->second)
     {
@@ -317,12 +317,12 @@ SonyCamera::SetFocus(UINT16 focusPosition)
         // to desired position, then repeat
         INT16 idealStep = 1;
 
-        INT16 usize = abs(diff);
-        INT16 bestDiff = abs(usize - m_focusSteps[idealStep]);
+        INT16 usize = static_cast<INT16>(abs(diff));
+        INT16 bestDiff = static_cast<INT16>(abs(usize - m_focusSteps[idealStep]));
 
         for (UINT16 test_id = idealStep + 1; test_id <= maxStepSize; test_id += 1)
         {
-            INT16 diff2 = abs(usize - (INT16)m_focusSteps[test_id]);
+            INT16 diff2 = static_cast<INT16>(abs(usize - (INT16)m_focusSteps[test_id]));
 
             if (diff2 < bestDiff)
             {
@@ -404,11 +404,11 @@ SonyCamera::SetFocusSteps(std::wstring steps, std::wstring sleeps, bool handsOff
             if (*sl.begin() == L'*')
             {
                 // It's a multiplier
-                m_focusSleeps[index] = index * _wtoi(sl.substr(1).c_str());
+                m_focusSleeps[index] = static_cast<unsigned short>(index * _wtoi(sl.substr(1).c_str()));
             }
             else
             {
-                m_focusSleeps[index] = _wtoi(sl.c_str());
+                m_focusSleeps[index] = static_cast<unsigned short>(_wtoi(sl.c_str()));
             }
 
             LOGINFO(L"Focus step %d = %d (%d / %f) - post-move-sleep = %d", index, (int)v, m_focusLimit, st, m_focusSleeps[index]);// *it);
@@ -425,7 +425,7 @@ SonyCamera::SetFocusSteps(std::wstring steps, std::wstring sleeps, bool handsOff
 void
 SonyCamera::MoveFocus(INT16 step)
 {
-    short diff = m_focusSteps[abs(step)];
+    short diff = m_focusSteps[static_cast<UINT16>(abs(step))];
 
     LOGTRACE(L"Moving focus by %d (current = %d, step_size = %d).. ", step, m_currentFocusPosition, diff);
 
@@ -465,5 +465,5 @@ SonyCamera::MoveFocus(INT16 step)
 
     LOGTRACE(L" new position = %d\n", m_currentFocusPosition);
 
-    Sleep(m_focusSleeps[abs(step)]);
+    Sleep(m_focusSleeps[static_cast<UINT16>(abs(step))]);
 }

@@ -23,7 +23,7 @@ CameraSettings::CameraSettings(Message *message)
         DWORD offset = 0;
 
         DWORD first = GetDWORD(offset);
-        DWORD second = GetDWORD(offset);
+        GetDWORD(offset); // second count is read to advance the offset only
 
         for (DWORD i = 0; i < first; i++)
         {
@@ -129,7 +129,7 @@ CameraSettings::cfind(const Property id) const
 int
 CameraSettings::size() const
 {
-    return m_properties.size();
+    return static_cast<int>(m_properties.size());
 }
 
 CameraProperty*

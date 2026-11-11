@@ -108,7 +108,7 @@ MTPDevice::Open()
                 m_openCount++;
                 m_handle = CreateEvent(nullptr, false, false, nullptr);
 
-                LOGINFO(L"x%p - Opened() with handle %p", (void*)this, (DWORD)m_handle);
+                LOGINFO(L"x%p - Opened() with handle %p", (void*)this, (void*)m_handle);
             }
             else
             {
@@ -133,7 +133,7 @@ MTPDevice::Open()
         LOGTRACE(L"Incrementing OpenCount to %d", m_openCount);
     }
 
-    LOGTRACE(L"Out: MTPDevice::Open - now open %d times with handle x%08x", m_openCount, (DWORD)m_handle);
+    LOGTRACE(L"Out: MTPDevice::Open - now open %d times with handle %p", m_openCount, (void*)m_handle);
 
     return m_handle;
 }
@@ -268,7 +268,6 @@ MTPDevice::InitFriendlyName()
         HRESULT hr;
         LPCWSTR* data;
         DWORD propertyLength = 0;
-        DWORD propertyType = 0;
         std::wstring result;
 
         hr = m_manager->GetDeviceFriendlyName(m_id.c_str(), NULL, &propertyLength);
@@ -319,7 +318,6 @@ MTPDevice::InitManufacturer()
         HRESULT hr;
         LPCWSTR* data;
         DWORD propertyLength = 0;
-        DWORD propertyType = 0;
         std::wstring result;
 
         hr = m_manager->GetDeviceManufacturer(m_id.c_str(), NULL, &propertyLength);
@@ -370,7 +368,6 @@ MTPDevice::InitDescription()
         HRESULT hr;
         LPCWSTR* data;
         DWORD propertyLength = 0;
-        DWORD propertyType = 0;
         std::wstring result;
 
         hr = m_manager->GetDeviceDescription(m_id.c_str(), NULL, &propertyLength);

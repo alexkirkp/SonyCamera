@@ -89,7 +89,7 @@ DummyDevice::StopNotifications()
 }
 
 Message*
-DummyDevice::InternalSend(Op kind, Message* out)
+DummyDevice::InternalSend(Op /*kind*/, Message* out)
 {
     // Here we emulate our desired device
     // We don't have to be super selective... just a switch on out->GetCommand()
@@ -134,7 +134,7 @@ DummyDevice::InternalSend(Op kind, Message* out)
 }
 
 Message*
-DummyDevice::GetDeviceInfo(Message* out)
+DummyDevice::GetDeviceInfo(Message* /*out*/)
 {
     MessageWriter w(COMMAND_RESULT_SUCCESS);
 
@@ -157,21 +157,21 @@ DummyDevice::GetDeviceInfo(Message* out)
 }
 
 Message*
-DummyDevice::GetStorageIds(Message* out)
+DummyDevice::GetStorageIds(Message* /*out*/)
 {
     // Result ignored at the moment, so no need to generate data
     return new Message(COMMAND_RESULT_SUCCESS);
 }
 
 Message*
-DummyDevice::GetNextHandle(Message* out)
+DummyDevice::GetNextHandle(Message* /*out*/)
 {
     // Result ignored at the moment, so no need to generate data
     return new Message(COMMAND_RESULT_SUCCESS);
 }
 
 Message*
-DummyDevice::GetPropertyList(Message* out)
+DummyDevice::GetPropertyList(Message* /*out*/)
 {
     MessageWriter w(COMMAND_RESULT_SUCCESS);
 
@@ -183,7 +183,7 @@ DummyDevice::GetPropertyList(Message* out)
 }
 
 Message*
-DummyDevice::ReadSettings(Message* out)
+DummyDevice::ReadSettings(Message* /*out*/)
 {
     MessageWriter w(COMMAND_RESULT_SUCCESS);
 

@@ -47,7 +47,7 @@ CameraTask::SetSteps(StateStepInfo steps[])
 bool
 CameraTask::AddStep(StateStepInfo info)
 {
-    steps.insert(std::pair<int, StateStepInfo>(info.id, info));
+    m_steps.insert(std::pair<int, StateStepInfo>(info.id, info));
 
     return true;
 }
@@ -150,7 +150,7 @@ CameraTask::Step(CameraTaskInfo& info)
     }
 
     // Reference, not a copy: retryCount/isActive must persist between calls to Step
-    StateStepInfo& stepInfo = steps[status.currentStep];
+    StateStepInfo& stepInfo = m_steps[status.currentStep];
 
     status.currentStepName = stepInfo.name;
 
@@ -177,44 +177,44 @@ CameraTask::Step(CameraTaskInfo& info)
         LOGTRACE(L"Pre: %s.%s", taskName.c_str(), stepName.c_str());
 #endif
         // An exception escaping here would terminate the host process; treat it as a failed step
-        StateResult result;
+        StateResult stepResult;
 
         try
         {
-            result = (stepInfo.handler)(info);
+            stepResult = (stepInfo.handler)(info);
         }
         catch (CameraException& e)
         {
             LOGERROR(L"Exception in %s.%s: %s", taskName.c_str(), stepName.c_str(), e.GetMessage().c_str());
-            result = StateResult::Fail;
+            stepResult = StateResult::Fail;
         }
         catch (const std::exception& e)
         {
             LOGERROR(L"std::exception in %s.%s: %S", taskName.c_str(), stepName.c_str(), e.what());
-            result = StateResult::Fail;
+            stepResult = StateResult::Fail;
         }
         catch (...)
         {
             LOGERROR(L"Unknown exception in %s.%s", taskName.c_str(), stepName.c_str());
-            result = StateResult::Fail;
+            stepResult = StateResult::Fail;
         }
 #ifdef DEBUG
-        LOGTRACE(L"Post: %s.%s (result = %d)", info.pTask->Name().c_str(), stepName.c_str(), result);
+        LOGTRACE(L"Post: %s.%s (stepResult = %d)", info.pTask->Name().c_str(), stepName.c_str(), stepResult);
 #endif
-        stepInfo.lastResult = result;
+        stepInfo.lastResult = stepResult;
 
-        if (!cancelled && cancel != INVALID_HANDLE_VALUE && result != StateResult::Cancel && stepInfo.cancelId >= 0)
+        if (!cancelled && cancel != INVALID_HANDLE_VALUE && stepResult != StateResult::Cancel && stepInfo.cancelId >= 0)
         {
             // Test for cancel event
             if (WaitForSingleObject(cancel, 0) == WAIT_OBJECT_0)
             {
-                result = StateResult::Cancel;
+                stepResult = StateResult::Cancel;
             }
         }
 
         if (!stepInfo.isTerminal)
         {
-            switch (result)
+            switch (stepResult)
             {
             case StateResult::Success:
                 status.currentStep = stepInfo.successId;
@@ -232,13 +232,13 @@ CameraTask::Step(CameraTaskInfo& info)
             case StateResult::Retry:
                 if (stepInfo.retryCount >= stepInfo.maxRetries)
                 {
-                    result = StateResult::Fail;
+                    stepResult = StateResult::Fail;
                     status.currentStep = stepInfo.failId >= 0 ? stepInfo.failId : stepInfo.successId;
                 }
                 break;
             }
 
-            if (result != StateResult::Retry)
+            if (stepResult != StateResult::Retry)
             {
                 // Leaving the step: a later visit starts afresh
                 stepInfo.isActive = false;
@@ -251,7 +251,7 @@ CameraTask::Step(CameraTaskInfo& info)
         {
             status.currentStep = CAMERA_TASK_COMPLETE;
             status.currentStepName = L"<complete>";
-            success = result == StateResult::Success;
+            success = stepResult == StateResult::Success;
         }
     }
 

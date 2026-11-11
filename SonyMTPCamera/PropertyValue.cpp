@@ -171,12 +171,12 @@ PropertyValue::ToPROPVARIANT() const
 
     case DataType::INT32:
         result.vt = VT_I4;
-        result.iVal = m_int32;
+        result.lVal = m_int32;
         break;
 
     case DataType::UINT32:
         result.vt = VT_UI4;
-        result.iVal = m_uint32;
+        result.ulVal = m_uint32;
         break;
 
     default:

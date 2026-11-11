@@ -148,7 +148,7 @@ MessageReader::GetString(DWORD &offset)
                     bool nullTerminated = (*(WCHAR*)(data + offset + (strlen - 1) * sizeof(WCHAR)) == L'\0');
 
                     result = std::wstring(((WCHAR*)(data + offset)), strlen - (nullTerminated ? 1 : 0));
-                    offset += strlen * sizeof(WCHAR);
+                    offset += static_cast<DWORD>(strlen * sizeof(WCHAR));
                 }
             }
             else

@@ -1,6 +1,9 @@
 #include "pch.h"
 #include "Image.h"
+#pragma warning(push)
+#pragma warning(disable : 4251) // vendored LibRaw header: std types in exported classes
 #include "libraw/libraw.h"
+#pragma warning(pop)
 #include "libjpeg//turbojpeg.h"
 #include "Logger.h"
 #include "Registry.h"
@@ -176,7 +179,6 @@ Image::ProcessARWData()
 {
     LOGTRACE(L"In: Image:: ProcessARWData()");
 
-    BYTE* result = nullptr;
     LibRaw* libraw = nullptr;
     libraw_processed_image_t* processed = nullptr;
     int r = 0;
@@ -258,8 +260,6 @@ Image::ProcessARWData()
                 std::string colorsStr = libraw->imgdata.idata.cdesc;
                 LOGINFO(L"RAW file color format = %S", colorsStr.c_str());
 
-                int xoffs = 0;
-                int yoffs = 0;
 
                 std::ostringstream builder;
 
@@ -367,12 +367,10 @@ Image::ProcessJPEGData()
     LOGTRACE(L"In: Image:: ProcessJPEGData()");
 
     tjhandle tj = nullptr;
-    BYTE* result = nullptr;
     int r = 0;
     int width = 0;
     int height = 0;
     int pitch = 0;
-    BYTE* temp = nullptr;
     int imageDataSize = GetDataLength() - m_imageOffset;
     BYTE* imageData = GetData() + m_imageOffset;
 
@@ -403,8 +401,8 @@ Image::ProcessJPEGData()
         pitch = tjPixelSize[TJPF_RGB];
 
         {
-            BYTE* temp = new BYTE[width * height * pitch];
-            r = tjDecompress2(tj, imageData, imageDataSize, temp, width, width * pitch, height, TJPF_RGB, TJFLAG_ACCURATEDCT);
+            BYTE* decoded = new BYTE[width * height * pitch];
+            r = tjDecompress2(tj, imageData, imageDataSize, decoded, width, width * pitch, height, TJPF_RGB, TJFLAG_ACCURATEDCT);
 
             if (r == ERROR_SUCCESS)
             {
@@ -415,7 +413,7 @@ Image::ProcessJPEGData()
 
                 for (int s = 0; s < width * height * pitch; s++)
                 {
-                    m_pixelData[s * 2] = temp[s];
+                    m_pixelData[s * 2] = decoded[s];
                 }
             }
             else
@@ -423,7 +421,7 @@ Image::ProcessJPEGData()
                 LOGERROR(L"Unable to Decompress image, error %s", TurboJPEGErrorToString(tj, r).c_str());
             }
 
-            delete[] temp;
+            delete[] decoded;
         }
 
         r = tjDestroy(tj);
