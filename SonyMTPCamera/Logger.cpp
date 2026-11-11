@@ -76,7 +76,7 @@ Logger::Log(LogLevel level, const WCHAR* format, ...)
             va_list args;
             va_start(args, format);
 
-            _vsnwprintf_s(buffer, buffersize, buffersize, format, args);
+            _vsnwprintf_s(buffer, buffersize, _TRUNCATE, format, args);
 
             if (s_logFileHandle != INVALID_HANDLE_VALUE)
             {
