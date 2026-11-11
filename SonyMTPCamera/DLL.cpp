@@ -235,7 +235,9 @@ OpenDeviceEx(LPWSTR deviceName, DWORD flags)
         if ((*it)->GetId() == deviceId)
         {
             LOGINFO(L"OpenDevice: Found device... trying to create/open");
-            result = GetCameraManager()->CreateCamera(*it, (flags & OPENDEVICEEX_OPEN_ANY_DEVICE) ? OPEN_OVERRIDE : 0);
+            bool createdHere = false;
+
+            result = GetCameraManager()->CreateCamera(*it, (flags & OPENDEVICEEX_OPEN_ANY_DEVICE) ? OPEN_OVERRIDE : 0, &createdHere);
             CameraLease camera = GetCameraManager()->GetCameraForHandle(result);
 
             if (!camera)
@@ -247,6 +249,8 @@ OpenDeviceEx(LPWSTR deviceName, DWORD flags)
             }
 
             bool initFailed = false;
+            // A camera another client already has open must survive our failed init
+            bool mayTearDown = createdHere;
 
             try
             {
@@ -271,7 +275,12 @@ OpenDeviceEx(LPWSTR deviceName, DWORD flags)
                 else
                 {
                     LOGERROR(L"Unable to initialize camera");
-                    camera->Close();
+
+                    if (mayTearDown)
+                    {
+                        camera->Close();
+                    }
+
                     initFailed = true;
                 }
             }
@@ -279,12 +288,22 @@ OpenDeviceEx(LPWSTR deviceName, DWORD flags)
             {
                 LOGERROR(L"Exception initializing camera: %s", gfe.GetMessage().c_str());
 
-                camera->Close();
+                if (mayTearDown)
+                {
+                    camera->Close();
+                }
+
                 initFailed = true;
             }
 
             // The Locker is out of scope here, so it is safe to delete the camera
-            if (initFailed)
+            if (initFailed && !mayTearDown)
+            {
+                // Shared camera: just drop our lease and report failure
+                camera.Release();
+                result = INVALID_HANDLE_VALUE;
+            }
+            else if (initFailed)
             {
                 Camera* doomed = camera.get();
 

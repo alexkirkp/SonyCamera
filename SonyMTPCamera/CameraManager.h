@@ -54,7 +54,9 @@ class CameraManager
 public:
     CameraManager();
     ~CameraManager();
-    HANDLE CreateCamera(Device* device, DWORD flags);
+    // *created (if given) is set true only when this call made and registered a new camera,
+    // false when it returned an already-open one (or failed)
+    HANDLE CreateCamera(Device* device, DWORD flags, bool* created = nullptr);
     HANDLE AddCamera(HANDLE hCamera, Camera* camera);
     // Unregisters the camera, then waits for all leases on it to be released.
     // The caller must not hold a lease on it, and may delete it afterwards.

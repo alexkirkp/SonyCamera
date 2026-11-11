@@ -43,5 +43,7 @@ private:
     Camera* camera = nullptr;
     CameraState lastCameraState = CameraState::Null;
     std::atomic<bool> stopRequested{ false };
+    bool stopped = false; // guarded by mutexHandle; set once the worker thread has drained the queue
+    static void FinishAborted(CameraTask* task, HANDLE waiter);
     std::list<std::pair<CameraTask*, HANDLE>> queue;
 };

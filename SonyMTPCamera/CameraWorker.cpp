@@ -205,11 +205,49 @@ DWORD CameraWorker::Run()
 
     }
 
+    // Stopping: nothing will run the remaining tasks, so fail them and wake their callers
+    // rather than leaving anyone waiting INFINITE. Done under the queue mutex, with the stopped
+    // flag set, so a racing QueueTask either lands here or is refused.
+    {
+        WaitForSingleObject(mutexHandle, INFINITE);
+        stopped = true;
+
+        if (currentTask)
+        {
+            FinishAborted(currentTask, waiter);
+            currentTask = nullptr;
+        }
+
+        for (auto& queued : queue)
+        {
+            FinishAborted(queued.first, queued.second);
+        }
+
+        queue.clear();
+        ReleaseMutex(mutexHandle);
+    }
+
     CoUninitialize();
 
     LOGTRACE(L"Out: CameraWorker::Run");
 
     return 0;
+}
+
+void
+CameraWorker::FinishAborted(CameraTask* task, HANDLE waiter)
+{
+    task->Abort();
+
+    if (waiter != INVALID_HANDLE_VALUE && waiter != nullptr)
+    {
+        // The caller owns a task it waits on and frees it itself
+        ReleaseSemaphore(waiter, 1, nullptr);
+    }
+    else
+    {
+        delete task;
+    }
 }
 
 bool
@@ -221,6 +259,15 @@ CameraWorker::QueueTask(CameraTask* task, HANDLE waiter)
     if (waitResult != WAIT_OBJECT_0)
     {
         // Need to error here
+    }
+
+    if (stopped)
+    {
+        // The worker has stopped and will never run this: fail it now
+        FinishAborted(task, waiter);
+        ReleaseMutex(mutexHandle);
+
+        return false;
     }
 
     // If there is a waiter, just queue it up - if there is no waiter, look thru

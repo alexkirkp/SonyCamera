@@ -8,6 +8,7 @@
 #include "dll.h"
 
 static CameraManager* cameraManager = nullptr;
+static std::mutex cameraManagerMutex; // guards creation/destruction of the singleton
 
 CameraManager::CameraManager()
 {
@@ -74,8 +75,13 @@ CameraManager::SetupSupportedDevices()
 }
 
 HANDLE
-CameraManager::CreateCamera(Device* device, DWORD flags)
+CameraManager::CreateCamera(Device* device, DWORD flags, bool* created)
 {
+    if (created)
+    {
+        *created = false;
+    }
+
     LOGTRACE(L"In: CameraManager::CreateCamera(device='%s', flags=x%08x)", device->GetFriendlyName().c_str(), flags);
     Camera* camera = nullptr;
     HANDLE hResult = INVALID_HANDLE_VALUE;
@@ -138,6 +144,11 @@ CameraManager::CreateCamera(Device* device, DWORD flags)
             if (task.Run(camera) && task.GetHandle() != INVALID_HANDLE_VALUE)
             {
                 hResult = AddCamera(task.GetHandle(), camera);
+
+                if (created && hResult != INVALID_HANDLE_VALUE)
+                {
+                    *created = true;
+                }
             }
             else
             {
@@ -287,6 +298,9 @@ GetCameraManager()
     // First use of the API initialises the DLL (nothing is done in DllMain)
     Init();
 
+    // Created exactly once even when several threads make the first call together
+    std::lock_guard<std::mutex> guard(cameraManagerMutex);
+
     if (cameraManager == nullptr)
     {
         LOGINFO(L"GetCameraManager: First time thru, creating new CameraManager singleton");
@@ -299,6 +313,8 @@ GetCameraManager()
 void
 RemoveCameraManager()
 {
+    std::lock_guard<std::mutex> guard(cameraManagerMutex);
+
     if (cameraManager)
     {
         LOGINFO(L"Destroying CameraManager");
