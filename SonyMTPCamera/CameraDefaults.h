@@ -1,0 +1,42 @@
+#pragma once
+#include "pch.h"
+#include <string>
+#include <vector>
+
+// Parser for CameraDefaults.ini / LegacyDefaults.ini (see the header comment in CameraDefaults.ini
+// for the format). It only builds an in-memory table; it does not touch the registry, and it does
+// not log, because it may run under the loader lock.
+
+struct DefaultValue
+{
+    std::wstring name;      // empty = the key's default value
+    bool isDword = false;
+    DWORD dword = 0;        // when isDword
+    std::wstring text;      // otherwise
+};
+
+struct DefaultKey
+{
+    std::wstring path;      // e.g. Cameras\Sony Corporation\ILCE-6000 (relative to the registry root)
+    std::vector<DefaultValue> values;
+};
+
+class CameraDefaults
+{
+public:
+    // Parses UTF-8 text. On failure returns false and sets error (line number and reason).
+    static bool Parse(const std::string& text, CameraDefaults& out, std::string& error);
+
+    // Parses the table embedded in the DLL as the CAMERA_DEFAULTS resource.
+    static bool LoadEmbedded(CameraDefaults& out, std::string& error);
+
+    const std::vector<DefaultKey>& Keys() const { return m_keys; }
+
+    // One line per fact, in the form used by tools/camera_defaults.py:
+    //   K<TAB>path
+    //   V<TAB>path<TAB>name<TAB>S|D<TAB>text      (name is "@" for the default value)
+    std::vector<std::wstring> Flatten() const;
+
+private:
+    std::vector<DefaultKey> m_keys;
+};

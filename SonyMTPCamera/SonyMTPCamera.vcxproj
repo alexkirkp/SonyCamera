@@ -164,6 +164,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="Camera.h" />
+    <ClInclude Include="CameraDefaults.h" />
     <ClInclude Include="CameraManager.h" />
     <ClInclude Include="CameraProperty.h" />
     <ClInclude Include="CameraSettings.h" />
@@ -221,6 +222,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Camera.cpp" />
+    <ClCompile Include="CameraDefaults.cpp" />
     <ClCompile Include="CameraManager.cpp" />
     <ClCompile Include="CameraProperty.cpp" />
     <ClCompile Include="CameraSettings.cpp" />

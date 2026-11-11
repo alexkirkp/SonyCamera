@@ -3,6 +3,8 @@
 // Used by Version.rc
 //
 
+#define IDR_CAMERA_DEFAULTS             301
+
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
