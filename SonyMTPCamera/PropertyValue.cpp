@@ -36,6 +36,7 @@ PropertyValue::Copy(const PropertyValue& rhs)
     m_uint16 = rhs.m_uint16;
     m_int32 = rhs.m_int32;
     m_uint32 = rhs.m_uint32;
+    m_str = rhs.m_str;
     m_type = rhs.m_type;
 }
 

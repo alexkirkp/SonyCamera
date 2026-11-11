@@ -53,7 +53,7 @@ MessageReader::GetDWORD(DWORD &offset)
 
     if (m_message)
     {
-        if (offset + 3 < m_message->GetDataLen())
+        if (offset < m_message->GetDataLen() && m_message->GetDataLen() - offset >= 4)
         {
             BYTE* data = m_message->GetData();
 
@@ -81,7 +81,7 @@ MessageReader::GetWORD(DWORD &offset)
 
     if (m_message)
     {
-        if (offset + 1 < m_message->GetDataLen())
+        if (offset < m_message->GetDataLen() && m_message->GetDataLen() - offset >= 2)
         {
             BYTE* data = m_message->GetData();
 
@@ -138,7 +138,8 @@ MessageReader::GetString(DWORD &offset)
             BYTE* data = m_message->GetData();
             size_t strlen = (size_t)data[offset];
 
-            if (offset + strlen < m_message->GetDataLen())
+            // Length byte, then strlen UTF-16 characters
+            if ((size_t)(m_message->GetDataLen() - offset - 1) >= strlen * sizeof(WCHAR))
             {
                 offset++;
 

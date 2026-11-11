@@ -15,6 +15,7 @@
 #include "CameraException.h"
 #include "Locker.h"
 #include "CameraTask.h"
+#include "ExposureSelection.h"
 
 constexpr auto MAX_MANUFACTURER_SIZE = 0x64;
 constexpr auto MAX_MODEL_SIZE = 0x64;
@@ -1647,30 +1648,6 @@ GetAllPropertyValues(HANDLE hCamera, PROPERTYVALUE* values, DWORD* count)
     return ERROR_SUCCESS;
 }
 
-static float
-ExposureDWORDToFloat(DWORD exposure, float bulbValue)
-{
-    DWORD num = 0;
-    DWORD den = 0;
-    float result = 0.0;
-
-    num = (exposure & 0xffff0000) >> 16;
-    den = exposure & 0x0000ffff;
-
-    switch (num)
-    {
-    case 0:
-        result = bulbValue;
-        break;
-
-    default:
-        result = (float)num / (float)den;
-        break;
-    }
-
-    return round(result * 100000) / 100000;
-}
-
 HRESULT
 SetExposureTime(HANDLE hCamera, float desired, PROPERTYVALUE* valueOut)
 {
@@ -1686,78 +1663,14 @@ SetExposureTime(HANDLE hCamera, float desired, PROPERTYVALUE* valueOut)
     {
         Locker lock(camera);
 
-        CameraSettings* cs = nullptr;
-        CameraProperty* v = nullptr;
-        DWORD currentExposure = 0;
-        float lastRead = (float) -9e9;
-        float current = 0.0;
         std::list<DWORD> exposureTimes = camera->GetDeviceInfo().GetExposureTimes();
-        short sameCount = 0;
-        float longestNonBulb = 0.0;
-
-        if (exposureTimes.empty())
-        {
-            return ERROR_NOT_SUPPORTED;
-        }
 
         if (exposureTimes.size() < 2)
         {
             return ERROR_NOT_SUPPORTED;
         }
 
-        auto i = exposureTimes.begin();
-
-        i++;
-        longestNonBulb = ExposureDWORDToFloat(*i, (float)9e9);
-
-        desired = desired == (float)0.0 ? (float)9e9 : round(desired * 100000) / 100000;
-
-        DWORD setting = 0xffffffff;  // Invalid value
-
-        if (desired > longestNonBulb)
-        {
-            desired = (float)9e9;
-            setting = *exposureTimes.begin();
-        }
-
-        // Find the best option
-        // i already points to the longest non-bulb exposure
-        // if desired is < i, then we compare the closeness to i, and i++
-        // if closer to i++ move there and try again
-        DWORD test1, test2;
-        float fTest1, fTest2;
-        float fDiff1, fDiff2;
-
-        while (setting == 0xffffffff && i != exposureTimes.end())
-        {
-            test1 = *i;
-            fTest1 = ExposureDWORDToFloat(test1, (float)9e9);
-
-            if (fTest1 < desired)
-            {
-                setting = *i;
-            }
-
-            i++;
-
-            if (i == exposureTimes.end())
-            {
-                setting = test1;
-            }
-            else
-            {
-                test2 = *i;
-                fTest2 = ExposureDWORDToFloat(test2, (float)9e9);
-
-                fDiff1 = abs(desired - fTest1);
-                fDiff2 = abs(desired - fTest2);
-
-                if (fDiff1 < fDiff2)
-                {
-                    setting = test1;
-                }
-            }
-        }
+        DWORD setting = SelectExposureSetting(exposureTimes, desired);
 
         LOGINFO(L"I think x%08x is best option", setting);
 

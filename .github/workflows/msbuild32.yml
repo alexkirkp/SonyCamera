@@ -40,8 +40,11 @@ jobs:
 
     - name: Build
       working-directory: ${{env.GITHUB_WORKSPACE}}
-      # Only the DLL project: the test and tool projects in the solution don't build. 64-bit only.
-      run: msbuild /m /p:Configuration=${{env.BUILD_CONFIGURATION}} -p:Platform=x64 -t:SonyMTPCamera ${{env.SOLUTION_FILE_PATH}}
+      # Only the DLL and its unit tests: the other tool projects in the solution don't build. 64-bit only.
+      run: msbuild /m /p:Configuration=${{env.BUILD_CONFIGURATION}} -p:Platform=x64 "-t:SonyMTPCamera;SonyMTPCamera_Tests" ${{env.SOLUTION_FILE_PATH}}
+
+    - name: Run unit tests
+      run: x64/${{env.BUILD_CONFIGURATION}}/SonyMTPCamera.Tests.exe
 
     - name: Upload SonyMTPCamera.dll
       uses: actions/upload-artifact@v7
