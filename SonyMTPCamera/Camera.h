@@ -125,4 +125,8 @@ private:
     // that window image-ready events must not start a download: StartCapture owns the image
     // buffer, and fetching while the camera processes a shot made an ILCE-7M3 drop off USB.
     volatile long m_preparingCapture = 0;
+    // After USB is pulled mid-exposure an ILCE-7M3 keeps reporting 'processing' (x0001) even
+    // while taking and delivering new photos normally. Per camera, so one camera's state
+    // doesn't change another's capture waits. Only touched under StartCapture.
+    bool m_processingStatusUnreliable = false;
 };

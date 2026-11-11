@@ -22,5 +22,6 @@ StateResult openCamera(CameraTaskInfo& info);
 StateResult closeCamera(CameraTaskInfo& info);
 StateResult setProperty(CameraTaskInfo& info);
 StateResult doCapture(CameraTaskInfo& info);
+StateResult abortDoCapture(CameraTaskInfo& info);
 StateResult downloadImage(CameraTaskInfo& info);
 StateResult processImage(CameraTaskInfo& info);

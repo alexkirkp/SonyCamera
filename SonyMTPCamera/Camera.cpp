@@ -14,12 +14,6 @@ constexpr ULONGLONG PREVIOUS_PHOTO_TIMEOUT = 15000;
 // (see below) waiting the full timeout only delays the exposure
 constexpr ULONGLONG PROCESSING_STATUS_TIMEOUT = 3000;
 
-// After USB is pulled mid-exposure an ILCE-7M3 keeps reporting 'processing' (x0001) even
-// while taking and delivering new photos normally, across reconnects. Once a capture has
-// had to go ahead regardless, stop waiting on that status, until the camera reports an
-// empty buffer again.
-static volatile bool s_processingStatusUnreliable = false;
-
 constexpr DWORD TASK_CANCEL_TIMEOUT = 20000;
 
 // Cancel a task the worker may still hold, and delete it once the worker has finished with it.
@@ -680,12 +674,14 @@ Camera::StartCapture(double duration, OutputMode outputMode, DWORD flags)
 
     if (bufferStatus == 0)
     {
-        s_processingStatusUnreliable = false;
+        m_processingStatusUnreliable = false;
     }
 
     while (bufferStatus != 0)
     {
-        if (bufferStatus == 0x0001 && s_processingStatusUnreliable)
+        // Once a capture has had to go ahead regardless, stop waiting on 'processing' until the
+        // camera reports an empty buffer again (it persists across reconnects)
+        if (bufferStatus == 0x0001 && m_processingStatusUnreliable)
         {
             LOGTRACE(L"  Camera reports 'processing' but that status has been stuck, not waiting");
             break;
@@ -709,7 +705,7 @@ Camera::StartCapture(double duration, OutputMode outputMode, DWORD flags)
 
             if (bufferStatus == 0x0001)
             {
-                s_processingStatusUnreliable = true;
+                m_processingStatusUnreliable = true;
             }
 
             break;

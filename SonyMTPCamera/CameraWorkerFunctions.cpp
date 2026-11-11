@@ -136,6 +136,15 @@ doCapture(CameraTaskInfo& info)
     return StateResult::Success;
 }
 
+StateResult
+abortDoCapture(CameraTaskInfo& info)
+{
+    // The capture ended without doCapture running, so it never reopened the window
+    info.pCamera->EndCaptureWindow();
+
+    return refreshSettings(info);
+}
+
 bool
 isImageReady(CameraSettings* cs)
 {

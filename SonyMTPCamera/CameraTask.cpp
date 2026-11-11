@@ -572,8 +572,8 @@ TakePhotoTask::TakePhotoTask(TakePhotoTaskParams* params)
             L"refreshSettings",
             refreshSettings,
             1,
-            5,
-            5,
+            2,
+            2,
             0,
             false,
             false,
@@ -592,7 +592,7 @@ TakePhotoTask::TakePhotoTask(TakePhotoTaskParams* params)
         {
             2,
             L"abortDoCapture",
-            refreshSettings,  // We just need to do something
+            abortDoCapture,   // Reopens the image-ready window; doCapture never got to
             0,
             0,
             -1,
