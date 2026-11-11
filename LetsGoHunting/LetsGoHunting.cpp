@@ -1,4 +1,4 @@
-// LetsGoHunting.cpp : This file contains the 'main' function. Program execution begins and ends there.
+﻿// LetsGoHunting.cpp : This file contains the 'main' function. Program execution begins and ends there.
 //
 
 #define WIN32_LEAN_AND_MEAN
@@ -6,7 +6,7 @@
 #include <windows.h>
 #include <iostream>
 #include <iomanip>
-#include "libusbK/libusbk.h"
+#include "../SonyMTPCamera/libusbK/libusbk.h"
 
 #define SONY_VENDOR_ID 0x054c
 
