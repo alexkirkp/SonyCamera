@@ -760,16 +760,15 @@ Camera::StartCapture(double duration, OutputMode outputMode, DWORD /*flags*/)
         throw CameraException(L"Could not fetch shutter button status");
     }
 
-    // Newer bodies (a6700) report drive mode as 32-bit and use 0xd213 as "focus found", not the
-    // shutter button, so it reads >1 after any AF lock and says nothing about the shutter.
-    CameraProperty* driveMode = cs->GetProperty(Property::StillCaptureMode);
-    bool d213IsFocusFound = driveMode && driveMode->GetInfo() && driveMode->GetInfo()->GetType() == DataType::UINT32;
+    // On the a6700 0xd213 is "focus found": it reads 2 ("Half") after any AF lock even though
+    // nobody is on the shutter (confirmed over USB), so only a full press (3+) blocks a capture.
+    UINT8 shutterState = shutterButtonStatus->GetUINT8();
 
-    if (d213IsFocusFound || shutterButtonStatus->GetUINT8() == 1)
+    if (shutterState <= 2)
     {
-        if (d213IsFocusFound)
+        if (shutterState == 2)
         {
-            LOGTRACE(L"  0xd213 is focus indication on this body (%s); not checking it for the shutter", shutterButtonStatus->ToString().c_str());
+            LOGTRACE(L"  Shutter button reads half-pressed / focus found (%s); continuing", shutterButtonStatus->ToString().c_str());
         }
         else
         {
