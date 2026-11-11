@@ -1,4 +1,4 @@
-#include "pch.h"
+﻿#include "pch.h"
 #include "SonyMTPCamera.h"
 #include <Ole2.h>
 #include <algorithm>
@@ -179,7 +179,7 @@ OpenDeviceEx(LPWSTR deviceName, DWORD flags)
         {
             LOGINFO(L"OpenDevice: Found device... trying to create/open");
             result = GetCameraManager()->CreateCamera(*it, (flags & OPENDEVICEEX_OPEN_ANY_DEVICE) ? OPEN_OVERRIDE : 0);
-            Camera* camera = GetCameraManager()->GetCameraForHandle(result);
+            CameraLease camera = GetCameraManager()->GetCameraForHandle(result);
 
             if (!camera)
             {
@@ -229,9 +229,12 @@ OpenDeviceEx(LPWSTR deviceName, DWORD flags)
             // The Locker is out of scope here, so it is safe to delete the camera
             if (initFailed)
             {
+                Camera* doomed = camera.get();
+
+                // Drop our own lease first: RemoveCamera waits for all leases to go
+                camera.Release();
                 GetCameraManager()->RemoveCamera(result);
-                delete camera;
-                camera = nullptr;
+                delete doomed;
                 result = INVALID_HANDLE_VALUE;
             }
         }
@@ -257,7 +260,7 @@ CloseDevice(HANDLE hCamera)
         ~CloseLockGuard() { ReleaseSRWLockExclusive(&closeLock); }
     } closeGuard;
 
-    Camera* camera = GetCameraManager()->GetCameraForHandle(hCamera);
+    CameraLease camera = GetCameraManager()->GetCameraForHandle(hCamera);
 
     if (!camera)
     {
@@ -287,8 +290,13 @@ CloseDevice(HANDLE hCamera)
             // This happens if the device is fully closed
             LOGINFO(L"Removing device x%p as it is no longer open", hCamera);
 
+            Camera* doomed = camera.get();
+
+            // Drop our own lease first: RemoveCamera waits for all leases to go, so once
+            // it returns no other call is still using the camera
+            camera.Release();
             GetCameraManager()->RemoveCamera(hCamera);
-            delete camera;
+            delete doomed;
         }
         else
         {
@@ -315,7 +323,7 @@ GetDeviceInfo(HANDLE hCamera, DEVICEINFO *info)
         return ERROR_INCORRECT_SIZE;
     }
 
-    Camera* camera = GetCameraManager()->GetCameraForHandle(hCamera);
+    CameraLease camera = GetCameraManager()->GetCameraForHandle(hCamera);
 
     if (camera)
     {
@@ -364,7 +372,7 @@ GetPreviewImage(HANDLE hCamera, IMAGEINFO *info)
         return ERROR_INVALID_PARAMETER;
     }
 
-    Camera* camera = GetCameraManager()->GetCameraForHandle(hCamera);
+    CameraLease camera = GetCameraManager()->GetCameraForHandle(hCamera);
 
     if (!camera)
     {
@@ -463,7 +471,7 @@ StartCapture(HANDLE hCamera, IMAGEINFO* info)
         return ERROR_INVALID_PARAMETER;
     }
 
-    Camera* camera = GetCameraManager()->GetCameraForHandle(hCamera);
+    CameraLease camera = GetCameraManager()->GetCameraForHandle(hCamera);
 
     if (!camera)
     {
@@ -514,7 +522,7 @@ GetCaptureStatus(HANDLE hCamera, IMAGEINFO* info)
         return ERROR_INVALID_PARAMETER;
     }
 
-    Camera* camera = GetCameraManager()->GetCameraForHandle(hCamera);
+    CameraLease camera = GetCameraManager()->GetCameraForHandle(hCamera);
 
     if (!camera)
     {
@@ -574,7 +582,7 @@ CancelCapture(HANDLE hCamera, IMAGEINFO* info)
 {
     LOGTRACE(L"In: CancelCapture(x%08p)", hCamera);
 
-    Camera* camera = GetCameraManager()->GetCameraForHandle(hCamera);
+    CameraLease camera = GetCameraManager()->GetCameraForHandle(hCamera);
 
     if (!camera)
     {
@@ -838,7 +846,7 @@ GetCameraInfo(HANDLE hCamera, CAMERAINFO* info, DWORD flags)
     LOGTRACE(L"In: GetCameraInfo(x%p)", hCamera);
 
     HRESULT result = ERROR_NOT_FOUND;
-    Camera* camera = GetCameraManager()->GetCameraForHandle(hCamera);
+    CameraLease camera = GetCameraManager()->GetCameraForHandle(hCamera);
 
     if (camera)
     {
@@ -1129,7 +1137,7 @@ GetPropertyList(HANDLE hCamera, DWORD* list, DWORD* listSize)
 {
     LOGTRACE(L"In: GetPropertyList(x%p, ...)", hCamera);
 
-    Camera* camera = GetCameraManager()->GetCameraForHandle(hCamera);
+    CameraLease camera = GetCameraManager()->GetCameraForHandle(hCamera);
 
     if (!camera)
     {
@@ -1207,7 +1215,7 @@ GetPropertyDescriptor(HANDLE hCamera, DWORD propertyId, PROPERTYDESCRIPTOR* desc
     LOGTRACE(L"In: GetPropertyDescriptor(x%p, x%04x, ...)", hCamera, propertyId);
 #endif // DEBUG
 
-    Camera* camera = GetCameraManager()->GetCameraForHandle(hCamera);
+    CameraLease camera = GetCameraManager()->GetCameraForHandle(hCamera);
 
     if (!camera)
     {
@@ -1266,7 +1274,7 @@ GetPropertyValueOption(HANDLE hCamera, DWORD propertyId, PROPERTYVALUEOPTION* op
     LOGTRACE(L"In: GetPropertyValueOption(x%p, x%04x, x%p, %d)", hCamera, propertyId, option, index);
 #endif
 
-    Camera* camera = GetCameraManager()->GetCameraForHandle(hCamera);
+    CameraLease camera = GetCameraManager()->GetCameraForHandle(hCamera);
 
     if (!camera)
     {
@@ -1368,7 +1376,7 @@ SetPropertyValue(HANDLE hCamera, DWORD propertyId, DWORD value)
     LOGTRACE(L"In: SetPropertyValue(x%p, x%04x, %d)", hCamera, propertyId, value);
 //#endif
 
-    Camera* camera = GetCameraManager()->GetCameraForHandle(hCamera);
+    CameraLease camera = GetCameraManager()->GetCameraForHandle(hCamera);
 
     if (!camera)
     {
@@ -1494,7 +1502,7 @@ SetPropertyValue(HANDLE hCamera, DWORD propertyId, DWORD value)
 HRESULT
 GetSinglePropertyValue(HANDLE hCamera, DWORD propertyId, PROPERTYVALUE* value)
 {
-    Camera* camera = GetCameraManager()->GetCameraForHandle(hCamera);
+    CameraLease camera = GetCameraManager()->GetCameraForHandle(hCamera);
 
     if (!camera)
     {
@@ -1534,7 +1542,7 @@ GetAllPropertyValues(HANDLE hCamera, PROPERTYVALUE* values, DWORD* count)
         return ERROR_INVALID_PARAMETER;
     }
 
-    Camera* camera = GetCameraManager()->GetCameraForHandle(hCamera);
+    CameraLease camera = GetCameraManager()->GetCameraForHandle(hCamera);
 
     if (!camera)
     {
@@ -1603,7 +1611,7 @@ ExposureDWORDToFloat(DWORD exposure, float bulbValue)
 HRESULT
 SetExposureTime(HANDLE hCamera, float desired, PROPERTYVALUE* valueOut)
 {
-    Camera* camera = GetCameraManager()->GetCameraForHandle(hCamera);
+    CameraLease camera = GetCameraManager()->GetCameraForHandle(hCamera);
     Property propertyId = Property::ShutterSpeed;
 
     if (!camera)
@@ -1703,7 +1711,7 @@ SetExposureTime(HANDLE hCamera, float desired, PROPERTYVALUE* valueOut)
 DWORD
 GetFocusLimit(HANDLE hCamera)
 {
-    Camera* camera = GetCameraManager()->GetCameraForHandle(hCamera);
+    CameraLease camera = GetCameraManager()->GetCameraForHandle(hCamera);
 
     if (!camera)
     {
@@ -1716,7 +1724,7 @@ GetFocusLimit(HANDLE hCamera)
 DWORD
 GetFocusPosition(HANDLE hCamera)
 {
-    Camera* camera = GetCameraManager()->GetCameraForHandle(hCamera);
+    CameraLease camera = GetCameraManager()->GetCameraForHandle(hCamera);
 
     if (!camera)
     {
@@ -1733,7 +1741,7 @@ SetFocusPosition(HANDLE hCamera, DWORD* focusPosition)
     LOGTRACE(L"In: SetFocusPosition(x%p, %d)", hCamera, *focusPosition);
     //#endif
 
-    Camera* camera = GetCameraManager()->GetCameraForHandle(hCamera);
+    CameraLease camera = GetCameraManager()->GetCameraForHandle(hCamera);
 
     if (!camera)
     {
@@ -1843,7 +1851,7 @@ IMPEXP HRESULT SetAttachedLens(HANDLE hCamera, LPWSTR lensId)
     LOGTRACE(L"In: SetAttachedLens(x%p, %s)", hCamera, lensId);
     //#endif
 
-    Camera* camera = GetCameraManager()->GetCameraForHandle(hCamera);
+    CameraLease camera = GetCameraManager()->GetCameraForHandle(hCamera);
 
     if (!camera)
     {

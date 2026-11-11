@@ -1,6 +1,7 @@
 #pragma once
 #include "pch.h"
 #include <list>
+#include <mutex>
 
 class Registry
 {
@@ -33,6 +34,8 @@ private:
     HKEY m_hk = nullptr;
     std::wstring m_root;
     DWORD m_openCount = 0;
+    // Guards m_hk and m_openCount. Recursive because the Set* overloads call CreateKey etc.
+    std::recursive_mutex m_mutex;
 };
 
 extern Registry registry;

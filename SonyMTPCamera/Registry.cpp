@@ -10,6 +10,8 @@ Registry::Registry(std::wstring root)
 bool
 Registry::Open()
 {
+    std::lock_guard<std::recursive_mutex> guard(m_mutex);
+
     HKEY key;
 
     m_openCount++;
@@ -32,6 +34,8 @@ Registry::Open()
 void
 Registry::Close()
 {
+    std::lock_guard<std::recursive_mutex> guard(m_mutex);
+
     if (m_openCount > 0)
     {
         m_openCount--;
@@ -47,6 +51,8 @@ Registry::Close()
 std::wstring
 Registry::GetString(std::wstring path, std::wstring value, std::wstring def)
 {
+    std::lock_guard<std::recursive_mutex> guard(m_mutex);
+
     std::wstring result;
     DWORD dataSize = 0;
 
@@ -67,6 +73,8 @@ Registry::GetString(std::wstring path, std::wstring value, std::wstring def)
 DWORD
 Registry::GetDWORD(std::wstring path, std::wstring value, DWORD def)
 {
+    std::lock_guard<std::recursive_mutex> guard(m_mutex);
+
     DWORD result = 0;
     DWORD dataSize = sizeof(DWORD);
 
@@ -78,6 +86,8 @@ Registry::GetDWORD(std::wstring path, std::wstring value, DWORD def)
 double
 Registry::GetDouble(std::wstring path, std::wstring value, double def)
 {
+    std::lock_guard<std::recursive_mutex> guard(m_mutex);
+
     double result = def;
     std::wstring strValue = GetString(path, value, L"");
 
@@ -92,6 +102,8 @@ Registry::GetDouble(std::wstring path, std::wstring value, double def)
 bool
 Registry::DoesKeyExist(std::wstring path)
 {
+    std::lock_guard<std::recursive_mutex> guard(m_mutex);
+
     HKEY hk = nullptr;
     LSTATUS hr = RegOpenKeyEx(m_hk, path.c_str(), 0, KEY_READ, &hk);
 
@@ -108,6 +120,8 @@ Registry::DoesKeyExist(std::wstring path)
 std::list<std::wstring>
 Registry::GetChildKeys(std::wstring path)
 {
+    std::lock_guard<std::recursive_mutex> guard(m_mutex);
+
     std::list<std::wstring> results;
 
     HKEY hk = nullptr;
@@ -148,6 +162,8 @@ Registry::GetChildKeys(std::wstring path)
 HKEY
 Registry::CreateKey(std::wstring path)
 {
+    std::lock_guard<std::recursive_mutex> guard(m_mutex);
+
     HKEY hk = nullptr;
 
     RegCreateKeyEx(m_hk, path.c_str(), 0, NULL, REG_OPTION_NON_VOLATILE, KEY_READ | KEY_WRITE, NULL, &hk, NULL);
@@ -158,18 +174,24 @@ Registry::CreateKey(std::wstring path)
 void
 Registry::CloseKey(HKEY hk)
 {
+    std::lock_guard<std::recursive_mutex> guard(m_mutex);
+
     RegCloseKey(hk);
 }
 
 bool
 Registry::SetString(HKEY hk, std::wstring value, std::wstring setting)
 {
+    std::lock_guard<std::recursive_mutex> guard(m_mutex);
+
     return RegSetValueEx(hk, value.c_str(), 0, REG_SZ, (BYTE*)setting.c_str(), setting.length() * sizeof(wchar_t)) == ERROR_SUCCESS;
 }
 
 bool
 Registry::SetString(std::wstring path, std::wstring value, std::wstring setting)
 {
+    std::lock_guard<std::recursive_mutex> guard(m_mutex);
+
     HKEY hk = CreateKey(path);
 
     SetString(hk, value, setting);
@@ -182,12 +204,16 @@ Registry::SetString(std::wstring path, std::wstring value, std::wstring setting)
 bool
 Registry::SetDWORD(HKEY hk, std::wstring value, DWORD setting)
 {
+    std::lock_guard<std::recursive_mutex> guard(m_mutex);
+
     return RegSetValueEx(hk, value.c_str(), 0, REG_DWORD, (BYTE*)&setting, sizeof(DWORD)) == ERROR_SUCCESS;
 }
 
 bool
 Registry::SetDWORD(std::wstring path, std::wstring value, DWORD setting)
 {
+    std::lock_guard<std::recursive_mutex> guard(m_mutex);
+
     HKEY hk = CreateKey(path);
 
     SetDWORD(hk, value, setting);
@@ -200,6 +226,8 @@ Registry::SetDWORD(std::wstring path, std::wstring value, DWORD setting)
 bool
 Registry::SetDouble(std::wstring path, std::wstring value, double setting)
 {
+    std::lock_guard<std::recursive_mutex> guard(m_mutex);
+
     std::wostringstream builder;
 
     builder << setting;
@@ -227,6 +255,8 @@ Registry::SetStringDefault (std::wstring path, std::wstring value, std::wstring 
 bool
 Registry::SetDWORDDefault(std::wstring path, std::wstring value, DWORD setting)
 {
+    std::lock_guard<std::recursive_mutex> guard(m_mutex);
+
     DWORD dataSize = sizeof(DWORD);
 
     if (RegGetValue(m_hk, path.c_str(), value.c_str(), RRF_RT_REG_DWORD, nullptr, nullptr, &dataSize) != ERROR_SUCCESS)
@@ -242,6 +272,8 @@ Registry::SetDWORDDefault(std::wstring path, std::wstring value, DWORD setting)
 bool
 Registry::SetDoubleDefault(std::wstring path, std::wstring value, double setting)
 {
+    std::lock_guard<std::recursive_mutex> guard(m_mutex);
+
     DWORD dataSize = 0;
 
     if (RegGetValue(m_hk, path.c_str(), value.c_str(), RRF_RT_REG_SZ, nullptr, nullptr, &dataSize) != ERROR_SUCCESS)

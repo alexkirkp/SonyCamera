@@ -1056,13 +1056,33 @@ CameraManager::CreateCamera(Device* device, DWORD flags)
     Camera* camera = nullptr;
     HANDLE hResult = INVALID_HANDLE_VALUE;
 
+    // Only one create at a time, so two threads can't both make a camera for the same device
+    std::lock_guard<std::mutex> createGuard(m_createMutex);
+
     // See if we already have this device
-    for (auto it = m_cameraMap.begin(); it != m_cameraMap.end() && hResult == INVALID_HANDLE_VALUE; it++)
     {
-        if ((*it).second->GetId() == device->GetId())
+        CameraLease existing;
+        HANDLE existingHandle = INVALID_HANDLE_VALUE;
+
         {
-            camera = (*it).second;
-            LOGTRACE(L"CameraManager::CreateCamera: Found existing camera with handle x%08x", (*it).first);
+            std::lock_guard<std::mutex> guard(m_mutex);
+
+            for (auto it = m_cameraMap.begin(); it != m_cameraMap.end(); it++)
+            {
+                if ((*it).second->GetId() == device->GetId())
+                {
+                    m_useCount[(*it).second]++;
+                    existing = CameraLease(this, (*it).second);
+                    existingHandle = (*it).first;
+                    break;
+                }
+            }
+        }
+
+        if (existing)
+        {
+            camera = existing;
+            LOGTRACE(L"CameraManager::CreateCamera: Found existing camera with handle x%08x", existingHandle);
 
             OpenCameraTask task;
 
@@ -1128,7 +1148,11 @@ CameraManager::AddCamera(HANDLE hCamera, Camera* camera)
     HANDLE shortHandle = CompatibleHandle(hCamera);
     // In 64-bit windows we could get a > 32-bit handle.  The ASCOM code is expecting a 32-bit value.
     // According to MSDN, only the bottom 32-bits are valid, so we can trim the top 32-bits
-    m_cameraMap.insert(std::pair<HANDLE, Camera*>(shortHandle, camera));
+    {
+        std::lock_guard<std::mutex> guard(m_mutex);
+
+        m_cameraMap.insert(std::pair<HANDLE, Camera*>(shortHandle, camera));
+    }
 
     LOGTRACE(L"Out: CameraManager::AddCamera(x%p, x%p), added handle x%p", hCamera, camera, shortHandle);
 
@@ -1153,26 +1177,71 @@ CameraManager::RemoveCamera(HANDLE hCamera)
     hCamera = CompatibleHandle(hCamera);
     LOGTRACE(L"In: CameraManager::RemoveCamera(x%p)", hCamera);
 
-    m_cameraMap.erase(hCamera);
+    {
+        std::unique_lock<std::mutex> guard(m_mutex);
+
+        auto it = m_cameraMap.find(hCamera);
+
+        if (it != m_cameraMap.end())
+        {
+            Camera* camera = it->second;
+
+            // No new lease can be taken once it is out of the map; wait for the existing ones
+            m_cameraMap.erase(it);
+            m_released.wait(guard, [&] { auto u = m_useCount.find(camera); return u == m_useCount.end() || u->second == 0; });
+            m_useCount.erase(camera);
+        }
+    }
 
     LOGTRACE(L"Out: CameraManager::RemoveCamera(x%p)", hCamera);
 }
 
-Camera*
+void
+CameraManager::ReleaseCamera(Camera* camera)
+{
+    std::lock_guard<std::mutex> guard(m_mutex);
+
+    auto it = m_useCount.find(camera);
+
+    if (it != m_useCount.end() && it->second > 0)
+    {
+        it->second--;
+    }
+
+    m_released.notify_all();
+}
+
+void
+CameraLease::Release()
+{
+    if (m_manager && m_camera)
+    {
+        m_manager->ReleaseCamera(m_camera);
+    }
+
+    m_manager = nullptr;
+    m_camera = nullptr;
+}
+
+CameraLease
 CameraManager::GetCameraForHandle(HANDLE hCamera)
 {
     hCamera = CompatibleHandle(hCamera);
 
     if (hCamera == CompatibleHandle(INVALID_HANDLE_VALUE))
     {
-        return nullptr;
+        return CameraLease();
     }
+
+    std::lock_guard<std::mutex> guard(m_mutex);
 
     std::unordered_map<HANDLE, Camera*>::iterator it = m_cameraMap.find(hCamera);
 
     if (it != m_cameraMap.end())
     {
-        return (*it).second;
+        m_useCount[it->second]++;
+
+        return CameraLease(this, it->second);
     }
     else
     {
@@ -1184,7 +1253,7 @@ CameraManager::GetCameraForHandle(HANDLE hCamera)
             LOGWARN(L"-- got a x%p with name %s", (it->first), (it->second)->GetDeviceInfo().GetManufacturer().c_str());
         }
 
-        return nullptr;
+        return CameraLease();
     }
 }
 
