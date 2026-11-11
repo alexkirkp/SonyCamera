@@ -49,10 +49,22 @@ Registry::Close()
 }
 
 std::wstring
-Registry::GetString(std::wstring path, std::wstring value, std::wstring def)
+Registry::ShippedPath(const std::wstring& path)
 {
-    std::lock_guard<std::recursive_mutex> guard(m_mutex);
+    auto starts = [&path](const wchar_t* root)
+    {
+        size_t n = wcslen(root);
 
+        return path.size() >= n && _wcsnicmp(path.c_str(), root, n) == 0 &&
+            (path.size() == n || path[n] == L'\\');
+    };
+
+    return (starts(L"Cameras") || starts(L"Lenses")) ? L"Defaults\\" + path : std::wstring();
+}
+
+std::wstring
+Registry::ReadString(const std::wstring& path, const std::wstring& value)
+{
     std::wstring result;
     DWORD dataSize = 0;
 
@@ -61,10 +73,38 @@ Registry::GetString(std::wstring path, std::wstring value, std::wstring def)
     if (dataSize)
     {
         LPWSTR str = (LPWSTR)new BYTE[dataSize];
-        LSTATUS s = RegGetValue(m_hk, path.c_str(), value.c_str(), RRF_RT_REG_SZ, nullptr, str, &dataSize);
+        RegGetValue(m_hk, path.c_str(), value.c_str(), RRF_RT_REG_SZ, nullptr, str, &dataSize);
 
         result = std::wstring(str, dataSize / sizeof(wchar_t) - 1);
         delete[] (BYTE*)str;
+    }
+
+    return result;
+}
+
+bool
+Registry::ReadDWORD(const std::wstring& path, const std::wstring& value, DWORD& result)
+{
+    DWORD dataSize = sizeof(DWORD);
+
+    return RegGetValue(m_hk, path.c_str(), value.c_str(), RRF_RT_REG_DWORD, nullptr, &result, &dataSize) == ERROR_SUCCESS;
+}
+
+std::wstring
+Registry::GetString(std::wstring path, std::wstring value, std::wstring def)
+{
+    std::lock_guard<std::recursive_mutex> guard(m_mutex);
+
+    std::wstring result = ReadString(path, value);
+
+    if (result.empty())
+    {
+        std::wstring shipped = ShippedPath(path);
+
+        if (!shipped.empty())
+        {
+            result = ReadString(shipped, value);
+        }
     }
 
     return result.empty() ? def : result;
@@ -76,11 +116,15 @@ Registry::GetDWORD(std::wstring path, std::wstring value, DWORD def)
     std::lock_guard<std::recursive_mutex> guard(m_mutex);
 
     DWORD result = 0;
-    DWORD dataSize = sizeof(DWORD);
 
-    LSTATUS regresult = RegGetValue(m_hk, path.c_str(), value.c_str(), RRF_RT_REG_DWORD, nullptr, &result, &dataSize);
+    if (ReadDWORD(path, value, result))
+    {
+        return result;
+    }
 
-    return regresult == ERROR_SUCCESS ? result : def;
+    std::wstring shipped = ShippedPath(path);
+
+    return (!shipped.empty() && ReadDWORD(shipped, value, result)) ? result : def;
 }
 
 double
@@ -100,10 +144,8 @@ Registry::GetDouble(std::wstring path, std::wstring value, double def)
 }
 
 bool
-Registry::DoesKeyExist(std::wstring path)
+Registry::KeyExists(const std::wstring& path)
 {
-    std::lock_guard<std::recursive_mutex> guard(m_mutex);
-
     HKEY hk = nullptr;
     LSTATUS hr = RegOpenKeyEx(m_hk, path.c_str(), 0, KEY_READ, &hk);
 
@@ -117,11 +159,68 @@ Registry::DoesKeyExist(std::wstring path)
     return false;
 }
 
+bool
+Registry::DoesKeyExist(std::wstring path)
+{
+    std::lock_guard<std::recursive_mutex> guard(m_mutex);
+
+    if (KeyExists(path))
+    {
+        return true;
+    }
+
+    std::wstring shipped = ShippedPath(path);
+
+    return !shipped.empty() && KeyExists(shipped);
+}
+
+bool
+Registry::DeleteTree(std::wstring path)
+{
+    std::lock_guard<std::recursive_mutex> guard(m_mutex);
+
+    LSTATUS hr = RegDeleteTree(m_hk, path.c_str());
+
+    return hr == ERROR_SUCCESS || hr == ERROR_FILE_NOT_FOUND;
+}
+
 std::list<std::wstring>
 Registry::GetChildKeys(std::wstring path)
 {
     std::lock_guard<std::recursive_mutex> guard(m_mutex);
 
+    std::list<std::wstring> results = ChildKeys(path);
+    std::wstring shipped = ShippedPath(path);
+
+    if (!shipped.empty())
+    {
+        // Union: user keys first, then shipped keys the user layer does not already have.
+        for (const std::wstring& name : ChildKeys(shipped))
+        {
+            bool found = false;
+
+            for (const std::wstring& have : results)
+            {
+                if (_wcsicmp(have.c_str(), name.c_str()) == 0)
+                {
+                    found = true;
+                    break;
+                }
+            }
+
+            if (!found)
+            {
+                results.push_back(name);
+            }
+        }
+    }
+
+    return results;
+}
+
+std::list<std::wstring>
+Registry::ChildKeys(const std::wstring& path)
+{
     std::list<std::wstring> results;
 
     HKEY hk = nullptr;

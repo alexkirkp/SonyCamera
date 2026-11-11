@@ -32,6 +32,10 @@ public:
 
     const std::vector<DefaultKey>& Keys() const { return m_keys; }
 
+    // Version stamp of the parsed table: a 32-bit FNV-1a hash of the source text, so any edit to
+    // the .ini changes it. Stored as Defaults\DataVersion to decide whether to rewrite the layer.
+    DWORD Version() const { return m_version; }
+
     // One line per fact, in the form used by tools/camera_defaults.py:
     //   K<TAB>path
     //   V<TAB>path<TAB>name<TAB>S|D<TAB>text      (name is "@" for the default value)
@@ -39,4 +43,5 @@ public:
 
 private:
     std::vector<DefaultKey> m_keys;
+    DWORD m_version = 0;
 };

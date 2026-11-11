@@ -248,6 +248,12 @@ CameraDefaults::Parse(const std::string& text, CameraDefaults& out, std::string&
     size_t pos = (text.compare(0, 3, "\xEF\xBB\xBF") == 0) ? 3 : 0;     // skip a UTF-8 BOM
 
     out.m_keys.clear();
+    out.m_version = 2166136261u;
+
+    for (unsigned char c : text)
+    {
+        out.m_version = (out.m_version ^ c) * 16777619u;
+    }
 
     while (pos <= text.size())
     {
