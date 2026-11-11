@@ -13,6 +13,14 @@ MessageReader::MessageReader(Message* message)
     }
 }
 
+MessageReader::MessageReader(Message* message, bool takeContents)
+{
+    if (message)
+    {
+        m_message = takeContents ? new Message(std::move(*message)) : new Message(*message);
+    }
+}
+
 MessageReader::~MessageReader()
 {
 #ifdef DEBUG

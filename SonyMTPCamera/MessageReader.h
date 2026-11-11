@@ -8,7 +8,10 @@
 class MessageReader
 {
 public:
+    // Copies the message (the caller keeps using its own)
     MessageReader(Message *message);
+    // Takes the message's buffer without copying it; the caller's message is left empty
+    MessageReader(Message *message, bool takeContents);
     virtual ~MessageReader();
 
 protected:

@@ -12,6 +12,8 @@ public:
     /* Constructor */
     Message(WORD command);
     Message(const Message& rhs);
+    // Takes over rhs's data buffer without copying it; rhs is left empty
+    Message(Message&& rhs) noexcept;
 
     /* Destructor */
     ~Message();

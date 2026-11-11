@@ -12,7 +12,7 @@ static const DWORD JPEG_IDENT = 0xe1ffd8ff;
 std::wstring Image::s_savePath;
 
 Image::Image(ObjectInfo* info, Message* message)
-    : MessageReader(message),
+    : MessageReader(message, true), // image data can be huge: move it, don't copy it
       m_info(info)
 {
     LOGTRACE(L"In: Image::Image @x%p - Creating from USB Data", (void*)this);

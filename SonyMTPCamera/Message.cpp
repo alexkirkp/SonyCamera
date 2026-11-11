@@ -27,6 +27,18 @@ Message::Message(const Message& rhs)
     }
 }
 
+Message::Message(Message&& rhs) noexcept
+    : m_command(rhs.m_command),
+      m_params(std::move(rhs.m_params)),
+      m_data(rhs.m_data),
+      m_dataLen(rhs.m_dataLen),
+      m_writeOffset(rhs.m_writeOffset)
+{
+    rhs.m_data = nullptr;
+    rhs.m_dataLen = 0;
+    rhs.m_writeOffset = 0;
+}
+
 Message::~Message()
 {
 #ifdef DEBUG
