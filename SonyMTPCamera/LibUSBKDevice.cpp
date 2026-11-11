@@ -116,6 +116,7 @@ LibUSBKDevice::Open()
                     }
 
                     m_openCount++;
+                    m_stopRx = false;
                     m_handle = CreateEvent(nullptr, false, false, nullptr);
                     m_hInterruptRxThread = CreateThread(NULL, 0, &_runInterruptRx, this, 0, &m_interruptRxThreadId);
 
@@ -156,27 +157,21 @@ LibUSBKDevice::Close()
         {
             StopNotifications();
 
-            if (UsbK_Free(m_interfaceHandle))
+            // Stop the rx thread and abort the pipes *before* freeing the interface, so the
+            // thread can never touch a freed handle.
+            m_stopRx = true;
+
+            UsbK_AbortPipe(m_interfaceHandle, m_inputPipe);
+            UsbK_AbortPipe(m_interfaceHandle, m_interruptPipe);
+
+            bool threadExited = true;
+
+            if (m_hInterruptRxThread != INVALID_HANDLE_VALUE && m_hInterruptRxThread != nullptr)
             {
-                m_openCount--;
-
-                CloseHandle(m_handle);
-                m_handle = INVALID_HANDLE_VALUE;
-
-                LOGTRACE(L"LibUSBKDevice::Close - Closed()");
-
-                m_stopRx = true;
-
-                UsbK_AbortPipe(m_interfaceHandle, m_inputPipe);
-                UsbK_AbortPipe(m_interfaceHandle, m_interruptPipe);
-
-                // Wait for exit
                 DWORD exitCode = 0;
                 DWORD waitCount = 0;
 
                 GetExitCodeThread(m_hInterruptRxThread, &exitCode);
-
-                waitCount = 0;
 
                 while (exitCode == STILL_ACTIVE && waitCount < THREAD_WAIT_EXIT_LOOPS)
                 {
@@ -188,7 +183,36 @@ LibUSBKDevice::Close()
                     GetExitCodeThread(m_hInterruptRxThread, &exitCode);
                 }
 
+                threadExited = (exitCode != STILL_ACTIVE);
+
+                if (threadExited)
+                {
+                    CloseHandle(m_hInterruptRxThread);
+                    m_hInterruptRxThread = INVALID_HANDLE_VALUE;
+                }
+            }
+
+            if (threadExited)
+            {
+                UsbK_Free(m_interfaceHandle);
+                m_interfaceHandle = INVALID_HANDLE_VALUE;
+
+                m_openCount--;
+
+                CloseHandle(m_handle);
+                m_handle = INVALID_HANDLE_VALUE;
+
+                // Allow a later reopen to start a fresh rx thread
+                m_stopRx = false;
+
+                LOGTRACE(L"LibUSBKDevice::Close - Closed()");
+
                 closed = true;
+            }
+            else
+            {
+                // Leave the interface allocated rather than free it under a live thread
+                LOGERROR(L"LibUSBKDevice::Close - interrupt thread did not exit, interface left open");
             }
         }
         else
@@ -248,23 +272,14 @@ LibUSBKDevice::Receive(Message* out)
 {
     m_sequence++;
 
-    PTPContainer* container = nullptr;
-
-    int paramCount = out->GetParams().size();
+    std::list<DWORD> lp = out->GetParams();
+    int paramCount = (int)lp.size();
 
     if (paramCount > 0)
     {
-        unsigned long* params = new unsigned long[paramCount];
-        int index = 0;
-        std::list<DWORD> lp = out->GetParams();
+        std::vector<unsigned long> params(lp.begin(), lp.end());
 
-        for (std::list<unsigned long>::iterator it = lp.begin(); it != lp.end(); it++)
-        {
-            params[index] = (unsigned long)*it;
-            index++;
-        }
-
-        Tx(PTPContainer::Type::Init, out->GetCommand(), paramCount * sizeof(long), (BYTE*)params);
+        Tx(PTPContainer::Type::Init, out->GetCommand(), paramCount * sizeof(long), (BYTE*)params.data());
     }
     else
     {
@@ -291,7 +306,40 @@ LibUSBKDevice::Receive(Message* out)
     {
         if (UsbK_ReadPipe(m_interfaceHandle, m_inputPipe, rxBuffer, MAX_BULK_RX_BUFFER_BYTES, &transferred, nullptr))
         {
-            // Got some data
+            // Got some data. A container larger than one USB transfer arrives in several
+            // reads; keep reading until the header's declared length has been received.
+            if (transferred >= sizeof(PTPHeader))
+            {
+                unsigned long declared = ((pPTPHeader)rxBuffer)->containerLength;
+                unsigned int total = transferred;
+                bool readOk = true;
+
+                if (declared > MAX_BULK_RX_BUFFER_BYTES)
+                {
+                    declared = MAX_BULK_RX_BUFFER_BYTES;
+                }
+
+                while (readOk && total < declared)
+                {
+                    unsigned int more = 0;
+
+                    readOk = UsbK_ReadPipe(m_interfaceHandle, m_inputPipe, rxBuffer + total, MAX_BULK_RX_BUFFER_BYTES - total, &more, nullptr) && more > 0;
+
+                    if (readOk)
+                    {
+                        total += more;
+                    }
+                }
+
+                if (!readOk)
+                {
+                    LOGWARN(L"Incomplete multi-packet container (%u of %lu bytes), error %d", total, declared, GetLastError());
+                    break;
+                }
+
+                transferred = total;
+            }
+
             PTPContainer* container = new PTPContainer(transferred, rxBuffer);
 
 #ifdef DEBUG

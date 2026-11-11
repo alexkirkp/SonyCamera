@@ -33,7 +33,12 @@ PTPContainer::PTPContainer(unsigned long dataLen, BYTE * data)
         this->_opcode = header->opcode;
         this->_sequenceNumber = header->sequenceNumber;
 
-        this->setData(header->containerLength - sizeof(PTPHeader), data + sizeof(PTPHeader));
+        // Never trust the header's length beyond what was actually transferred, and
+        // never let a short/garbage length wrap below the header size.
+        unsigned long available = dataLen - sizeof(PTPHeader);
+        unsigned long declared = header->containerLength >= sizeof(PTPHeader) ? header->containerLength - sizeof(PTPHeader) : 0;
+
+        this->setData(declared < available ? declared : available, data + sizeof(PTPHeader));
     }
     else
     {

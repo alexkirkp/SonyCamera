@@ -82,6 +82,7 @@
     <ClCompile Include="PropertyParserTests.cpp" />
     <ClCompile Include="MutexGuardTests.cpp" />
     <ClCompile Include="FocusStepsTests.cpp" />
+    <ClCompile Include="PTPContainerTests.cpp" />
   </ItemGroup>
   <ItemGroup>
     <!-- Sources under test, compiled straight from the DLL project -->
@@ -98,6 +99,7 @@
     <ClCompile Include="..\SonyMTPCamera\CameraSettings.cpp" />
     <ClCompile Include="..\SonyMTPCamera\PropertyInfo.cpp" />
     <ClCompile Include="..\SonyMTPCamera\FocusSteps.cpp" />
+    <ClCompile Include="..\SonyMTPCamera\PTPContainer.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>
