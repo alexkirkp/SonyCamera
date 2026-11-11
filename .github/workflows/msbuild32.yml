@@ -10,6 +10,7 @@ on:
     branches: [ "master" ]
   pull_request:
     branches: [ "master" ]
+  workflow_dispatch:
 
 env:
   # Path to the solution file relative to the root of the project.
@@ -26,14 +27,6 @@ permissions:
 jobs:
   build:
     runs-on: windows-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: x86
-            dll: Release/SonyMTPCamera.dll
-          - platform: x64
-            dll: x64/Release/SonyMTPCamera.dll
 
     steps:
     - uses: actions/checkout@v4
@@ -47,13 +40,12 @@ jobs:
 
     - name: Build
       working-directory: ${{env.GITHUB_WORKSPACE}}
-      # Add additional options to the MSBuild command line here (like platform or verbosity level).
-      # See https://docs.microsoft.com/visualstudio/msbuild/msbuild-command-line-reference
-      run: msbuild /m /p:Configuration=${{env.BUILD_CONFIGURATION}} -p:Platform=${{matrix.platform}} ${{env.SOLUTION_FILE_PATH}}
+      # Only the DLL project: the test and tool projects in the solution don't build. 64-bit only.
+      run: msbuild /m /p:Configuration=${{env.BUILD_CONFIGURATION}} -p:Platform=x64 -t:SonyMTPCamera ${{env.SOLUTION_FILE_PATH}}
 
     - name: Upload SonyMTPCamera.dll
       uses: actions/upload-artifact@v4
       with:
-        name: SonyMTPCamera-${{matrix.platform}}
-        path: ${{matrix.dll}}
+        name: SonyMTPCamera-x64
+        path: x64/Release/SonyMTPCamera.dll
         if-no-files-found: error
