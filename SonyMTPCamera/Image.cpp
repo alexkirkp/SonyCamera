@@ -458,7 +458,9 @@ Image::ProcessJPEGData()
         break;
 
     default:
-        LOGERROR(L"Unsupported output mode %d for JPEG file (only supports RGB, JPEG, PASSTHRU)", m_outputMode);
+        LOGERROR(L"Output mode %d needs RAW data but the camera sent a JPEG (%u bytes). Check the camera's Compression Setting is RAW "
+                 L"and, on cameras with a PC Remote still-image transfer option (e.g. a6700), that it is set to Original, not 2M. "
+                 L"JPEG files only support RGB, JPEG and PASSTHRU output.", (int)m_outputMode, GetDataLength());
         break;
     }
 
