@@ -33,8 +33,10 @@ Lockable::Lock(DWORD timeout)
         throw CameraLockedException(L"Timeout waiting for object to become free");
 
     case WAIT_ABANDONED:
-        LOGERROR(L"Waiting for Controlled Access Mutex abandoned");
-        throw CameraException(L"Waiting for object - got WAIT_ABANDONED");
+        // The previous owner died holding it; we own it now and must unlock it later like any other
+        LOGWARN(L"Controlled Access Mutex was abandoned by its previous owner, taking ownership");
+        result = true;
+        break;
 
     case WAIT_FAILED:
         LOGERROR(L"Waiting for Controlled Access Mutex failed");

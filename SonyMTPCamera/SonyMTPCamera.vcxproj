@@ -204,6 +204,7 @@
     <ClInclude Include="libusbK\libusbk.h" />
     <ClInclude Include="libusbK\lusbk_shared.h" />
     <ClInclude Include="Lockable.h" />
+    <ClInclude Include="MutexGuard.h" />
     <ClInclude Include="Locker.h" />
     <ClInclude Include="Logger.h" />
     <ClInclude Include="Message.h" />

@@ -80,6 +80,7 @@
     <ClCompile Include="CropTests.cpp" />
     <ClCompile Include="DeviceRemovedTests.cpp" />
     <ClCompile Include="PropertyParserTests.cpp" />
+    <ClCompile Include="MutexGuardTests.cpp" />
   </ItemGroup>
   <ItemGroup>
     <!-- Sources under test, compiled straight from the DLL project -->

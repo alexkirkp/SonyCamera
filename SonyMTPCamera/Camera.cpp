@@ -3,6 +3,7 @@
 #include "Registry.h"
 #include "Logger.h"
 #include "CameraException.h"
+#include "MutexGuard.h"
 #include <iostream>
 
 constexpr auto THREAD_WAIT_EXIT_LOOPS = 20;
@@ -153,34 +154,37 @@ Camera::OnImageBufferStatus(ImageBufferStatus status)
     {
         // Called from the WPD event thread (and the worker), concurrently with StartCapture,
         // so only touch the task pointers under the lock.
-        if (WaitForSingleObject(m_hBusyMutex, 1000) != WAIT_OBJECT_0)
+        DownloadAndProcessImageTask* task = nullptr;
+
         {
-            LOGWARN(L"Camera busy, ignoring image-ready notification");
-            return;
+            MutexGuard guard(m_hBusyMutex, 1000);
+
+            if (!guard)
+            {
+                LOGWARN(L"Camera busy, ignoring image-ready notification");
+                return;
+            }
+
+            if (m_downloadAndProcessImageTask)
+            {
+                // A download is already queued, running, or holding an image not yet collected.
+                // A stuck camera can send these notifications repeatedly; replacing the task here
+                // lost the image or freed the task while it ran.
+                LOGINFO(L"Ignoring image-ready notification, a download is already in progress or waiting to be collected");
+                return;
+            }
+
+            if (!m_takePhotoTaskParams) {
+                m_takePhotoTaskParams = new TakePhotoTaskParams(0, OutputMode::PASSTHRU);
+            }
+
+            task = new DownloadAndProcessImageTask(m_takePhotoTaskParams);
+
+            // Prepare before publishing: a StartCapture/CleanupCapture that takes the task in the gap
+            // before Start() then waits for it to be queued and run, instead of deleting it early.
+            task->Prepare();
+            m_downloadAndProcessImageTask = task;
         }
-
-        if (m_downloadAndProcessImageTask)
-        {
-            // A download is already queued, running, or holding an image not yet collected.
-            // A stuck camera can send these notifications repeatedly; replacing the task here
-            // lost the image or freed the task while it ran.
-            ReleaseMutex(m_hBusyMutex);
-            LOGINFO(L"Ignoring image-ready notification, a download is already in progress or waiting to be collected");
-            return;
-        }
-
-        if (!m_takePhotoTaskParams) {
-            m_takePhotoTaskParams = new TakePhotoTaskParams(0, OutputMode::PASSTHRU);
-        }
-
-        DownloadAndProcessImageTask* task = new DownloadAndProcessImageTask(m_takePhotoTaskParams);
-
-        // Prepare before publishing: a StartCapture/CleanupCapture that takes the task in the gap
-        // before Start() then waits for it to be queued and run, instead of deleting it early.
-        task->Prepare();
-        m_downloadAndProcessImageTask = task;
-
-        ReleaseMutex(m_hBusyMutex);
 
         // Queue outside the lock: queuing waits for the worker, which can be mid-exposure
         task->Start(this);
@@ -264,14 +268,15 @@ Camera::RefreshDeviceInfo()
     ProcessDeviceInfoOverrides(newDeviceInfo);
     newDeviceInfo.DumpToLog();
 
-    DWORD waitResult = WaitForSingleObject(m_hBusyMutex, 1000);
+    MutexGuard guard(m_hBusyMutex, 1000);
 
-    if (waitResult == WAIT_OBJECT_0)
+    if (!guard)
     {
-        m_deviceInfo = newDeviceInfo;
+        LOGWARN(L"RefreshDeviceInfo: timed out waiting for the lock, device info not updated");
+        return false;
     }
 
-    ReleaseMutex(m_hBusyMutex);
+    m_deviceInfo = newDeviceInfo;
 
     return true;
 }
@@ -584,17 +589,17 @@ Camera::StartCapture(double duration, OutputMode outputMode, DWORD /*flags*/)
     DownloadAndProcessImageTask* oldDownloadTask = nullptr;
     TakePhotoTaskParams* oldParams = nullptr;
 
-    DWORD waitResult = WaitForSingleObject(m_hBusyMutex, 1000);
-
-    if (waitResult != WAIT_OBJECT_0 && waitResult != WAIT_ABANDONED)
     {
-        // Without the lock we cannot take over the old tasks, and would later overwrite the
-        // task pointers while OnImageBufferStatus uses them. Fail the call instead.
-        LOGERROR(L"StartCapture: timed out waiting for the camera lock (%d); not starting capture", waitResult);
-        throw CameraException(L"Camera busy, could not start capture");
-    }
+        MutexGuard guard(m_hBusyMutex, 1000);
 
-    {
+        if (!guard)
+        {
+            // Without the lock we cannot take over the old tasks, and would later overwrite the
+            // task pointers while OnImageBufferStatus uses them. Fail the call instead.
+            LOGERROR(L"StartCapture: timed out waiting for the camera lock (%d); not starting capture", guard.Result());
+            throw CameraException(L"Camera busy, could not start capture");
+        }
+
         oldPhotoTask = m_takePhotoTask;
         oldDownloadTask = m_downloadAndProcessImageTask;
         oldParams = m_takePhotoTaskParams;
@@ -603,8 +608,6 @@ Camera::StartCapture(double duration, OutputMode outputMode, DWORD /*flags*/)
         m_takePhotoTaskParams = nullptr;
 
         SetCaptureStatus(CaptureStatus::Created);
-
-        ReleaseMutex(m_hBusyMutex);
     }
 
     if (oldPhotoTask)
@@ -811,17 +814,20 @@ Camera::StartCapture(double duration, OutputMode outputMode, DWORD /*flags*/)
         photoTask->Prepare();
 
         // Publish the task pointers under the lock (OnImageBufferStatus reads them)
-        if (WaitForSingleObject(m_hBusyMutex, 1000) != WAIT_OBJECT_0)
         {
-            delete photoTask;
-            delete params;
-            LOGERROR(L"StartCapture: timed out waiting for the camera lock; not starting capture");
-            throw CameraException(L"Camera busy, could not start capture");
-        }
+            MutexGuard guard(m_hBusyMutex, 1000);
 
-        m_takePhotoTaskParams = params;
-        m_takePhotoTask = photoTask;
-        ReleaseMutex(m_hBusyMutex);
+            if (!guard)
+            {
+                delete photoTask;
+                delete params;
+                LOGERROR(L"StartCapture: timed out waiting for the camera lock; not starting capture");
+                throw CameraException(L"Camera busy, could not start capture");
+            }
+
+            m_takePhotoTaskParams = params;
+            m_takePhotoTask = photoTask;
+        }
 
         // doCapture reopens the image-ready window once the shutter is released
         preparing.handedOff = true;
@@ -843,13 +849,12 @@ Camera::StartCapture(double duration, OutputMode outputMode, DWORD /*flags*/)
 CameraSettings*
 Camera::GetSettings() const
 {
-    DWORD waitResult = WaitForSingleObject(m_hBusyMutex, 1000);
+    MutexGuard guard(m_hBusyMutex, 1000);
     CameraSettings* result = nullptr;
 
-    if (waitResult == WAIT_OBJECT_0 || waitResult == WAIT_ABANDONED)
+    if (guard)
     {
         result = new CameraSettings(*m_settings);
-        ReleaseMutex(m_hBusyMutex);
     }
     else
     {
@@ -862,10 +867,10 @@ Camera::GetSettings() const
 CameraProperty*
 Camera::GetProperty(Property id) const
 {
-    DWORD waitResult = WaitForSingleObject(m_hBusyMutex, 1000);
+    MutexGuard guard(m_hBusyMutex, 1000);
     CameraProperty* result = nullptr;
 
-    if (waitResult == WAIT_OBJECT_0)
+    if (guard)
     {
         CameraProperty* existing = m_settings->GetProperty(id);
 
@@ -873,8 +878,6 @@ Camera::GetProperty(Property id) const
         {
             result = existing->Clone();
         }
-
-        ReleaseMutex(m_hBusyMutex);
     }
     else
     {
@@ -888,14 +891,16 @@ void
 Camera::SetCaptureStatus(CaptureStatus status)
 {
     LOGTRACE(L"Set capture status to: %d", status);
-    DWORD waitResult = WaitForSingleObject(m_hBusyMutex, 1000);
+    MutexGuard guard(m_hBusyMutex, 1000);
 
-    if (waitResult == WAIT_OBJECT_0)
+    if (guard)
     {
         m_captureStatus = status;
     }
-
-    ReleaseMutex(m_hBusyMutex);
+    else
+    {
+        LOGWARN(L"Camera::SetCaptureStatus: timed out waiting for the lock, status not updated");
+    }
 }
 
 const CaptureStatus
@@ -903,14 +908,14 @@ Camera::GetCaptureStatus()
 {
     CaptureStatus result = CaptureStatus::Failed;
 
-    DWORD waitResult = WaitForSingleObject(m_hBusyMutex, 1000);
-
-    if (waitResult == WAIT_OBJECT_0)
     {
-        result = m_captureStatus;
-    }
+        MutexGuard guard(m_hBusyMutex, 1000);
 
-    ReleaseMutex(m_hBusyMutex);
+        if (guard)
+        {
+            result = m_captureStatus;
+        }
+    }
 
     // Nothing still in progress can complete once the device is gone (an already
     // downloaded image can still be collected)
@@ -964,25 +969,26 @@ Camera::GetCaptureStatus()
 Image*
 Camera::GetCapturedImage()
 {
-    DWORD waitResult = WaitForSingleObject(m_hBusyMutex, 1000);
     Image* image = nullptr;
 
-    if (waitResult == WAIT_OBJECT_0)
     {
-        if (m_downloadAndProcessImageTask && GetCaptureStatus() == CaptureStatus::Complete)//m_downloadAndProcessImageTask && m_downloadAndProcessImageTask->IsComplete())
+        MutexGuard guard(m_hBusyMutex, 1000);
+
+        if (guard)
         {
-            image = m_downloadAndProcessImageTask->GetImage();
+            if (m_downloadAndProcessImageTask && GetCaptureStatus() == CaptureStatus::Complete)
+            {
+                image = m_downloadAndProcessImageTask->GetImage();
+            }
         }
     }
-
-    ReleaseMutex(m_hBusyMutex);
 
     if (image)
     {
         // Update a couple of settings based on some EXIF data read from the image
-        DWORD exifWait = WaitForSingleObject(m_hBusyMutex, 1000);
+        MutexGuard exifGuard(m_hBusyMutex, 1000);
 
-        if (exifWait == WAIT_OBJECT_0)
+        if (exifGuard)
         {
             LOGTRACE(L"Updating temperature and focus properties from EXIF");
 
@@ -1008,8 +1014,10 @@ Camera::GetCapturedImage()
                 LOGERROR(L"Unable to find FocusPosition property");
             }
         }
-
-        ReleaseMutex(m_hBusyMutex);
+        else
+        {
+            LOGWARN(L"Camera::GetCapturedImage: timed out waiting for the lock, skipping EXIF property update");
+        }
 
         return image;
     }
@@ -1023,18 +1031,25 @@ Camera::CancelCapture()
     // As in StartCapture: take the task over under the lock, wait for it outside it
     TakePhotoTask* task = nullptr;
 
-    if (WaitForSingleObject(m_hBusyMutex, 1000) == WAIT_OBJECT_0)
     {
-        task = m_takePhotoTask;
-        m_takePhotoTask = nullptr;
-        ReleaseMutex(m_hBusyMutex);
+        MutexGuard guard(m_hBusyMutex, 1000);
+
+        if (guard)
+        {
+            task = m_takePhotoTask;
+            m_takePhotoTask = nullptr;
+        }
     }
 
-    if (!DisposeTask(task) && WaitForSingleObject(m_hBusyMutex, 1000) == WAIT_OBJECT_0)
+    if (!DisposeTask(task))
     {
-        // The task still uses the params; keep StartCapture from freeing them
-        m_takePhotoTaskParams = nullptr;
-        ReleaseMutex(m_hBusyMutex);
+        MutexGuard guard(m_hBusyMutex, 1000);
+
+        if (guard)
+        {
+            // The task still uses the params; keep StartCapture from freeing them
+            m_takePhotoTaskParams = nullptr;
+        }
     }
 
     // A cancelled capture may never reach doCapture, which would normally do this
@@ -1055,18 +1070,25 @@ Camera::CleanupCapture()
     // wait for it outside it, as StartCapture does.
     DownloadAndProcessImageTask* downloadTask = nullptr;
 
-    if (WaitForSingleObject(m_hBusyMutex, 1000) == WAIT_OBJECT_0)
     {
-        downloadTask = m_downloadAndProcessImageTask;
-        m_downloadAndProcessImageTask = nullptr;
-        ReleaseMutex(m_hBusyMutex);
+        MutexGuard guard(m_hBusyMutex, 1000);
+
+        if (guard)
+        {
+            downloadTask = m_downloadAndProcessImageTask;
+            m_downloadAndProcessImageTask = nullptr;
+        }
     }
 
     // The params stay owned by the camera; StartCapture frees them. If the task will not stop,
     // DisposeTask leaks it rather than free memory the worker may still use.
-    if (!DisposeTask(downloadTask) && WaitForSingleObject(m_hBusyMutex, 1000) == WAIT_OBJECT_0)
+    if (!DisposeTask(downloadTask))
     {
-        m_takePhotoTaskParams = nullptr;
-        ReleaseMutex(m_hBusyMutex);
+        MutexGuard guard(m_hBusyMutex, 1000);
+
+        if (guard)
+        {
+            m_takePhotoTaskParams = nullptr;
+        }
     }
 }

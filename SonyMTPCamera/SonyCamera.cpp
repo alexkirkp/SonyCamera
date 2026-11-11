@@ -3,6 +3,7 @@
 #include "Logger.h"
 #include "CameraException.h"
 #include "Locker.h"
+#include "MutexGuard.h"
 
 #define SONY_GET_NEXT_HANDLE_ENABLE
 #define SONY_GET_NEXT_HANDLE_EXTRA_PARAMS
@@ -161,9 +162,9 @@ SonyCamera::RefreshSettings(bool refreshFakePropertiesToo)
             LoadFakeProperties(&cs);
         }
 
-        DWORD waitResult = WaitForSingleObject(m_hBusyMutex, 1000);
+        MutexGuard guard(m_hBusyMutex, 1000);
 
-        if (waitResult == WAIT_OBJECT_0)
+        if (guard)
         {
             if (!m_settings)
             {
@@ -173,11 +174,6 @@ SonyCamera::RefreshSettings(bool refreshFakePropertiesToo)
             {
                 m_settings->Copy(cs);
             }
-        }
-
-        if (waitResult == WAIT_OBJECT_0 || waitResult == WAIT_ABANDONED)
-        {
-            ReleaseMutex(m_hBusyMutex);
         }
     }
     else
