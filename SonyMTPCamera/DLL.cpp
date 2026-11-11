@@ -359,6 +359,11 @@ GetPreviewImage(HANDLE hCamera, IMAGEINFO *info)
 {
     LOGTRACE(L"In: GetPreviewImage(x%p, @ x%p)", hCamera, info);
 
+    if (!info)
+    {
+        return ERROR_INVALID_PARAMETER;
+    }
+
     Camera* camera = GetCameraManager()->GetCameraForHandle(hCamera);
 
     if (!camera)
@@ -430,11 +435,15 @@ GetPreviewImage(HANDLE hCamera, IMAGEINFO *info)
         }
         else {
             LOGWARN(L"Problem getting preview");
+
+            info->status = (DWORD)CaptureStatus::Failed;
         }
     }
     catch (CameraException & gfe)
     {
         LOGERROR(L"Exception in GetPreviewImage: %s", gfe.GetMessage().c_str());
+
+        info->status = (DWORD)CaptureStatus::Failed;
     }
 
     LOGTRACE(L"Out: GetPreviewImage(x%p, @ x%p) - Returning data", hCamera, info);
@@ -448,6 +457,11 @@ StartCapture(HANDLE hCamera, IMAGEINFO* info)
     LOGTRACE(L"In: StartCapture(x%p, @ x%p)", hCamera, info);
 
     HRESULT result = ERROR_CANCELLED;
+
+    if (!info)
+    {
+        return ERROR_INVALID_PARAMETER;
+    }
 
     Camera* camera = GetCameraManager()->GetCameraForHandle(hCamera);
 
@@ -495,6 +509,11 @@ GetCaptureStatus(HANDLE hCamera, IMAGEINFO* info)
 #ifdef DEBUG
     LOGTRACE(L"In: GetCaptureStatus(x%08p)", hCamera);
 #endif
+    if (!info)
+    {
+        return ERROR_INVALID_PARAMETER;
+    }
+
     Camera* camera = GetCameraManager()->GetCameraForHandle(hCamera);
 
     if (!camera)
@@ -514,6 +533,15 @@ GetCaptureStatus(HANDLE hCamera, IMAGEINFO* info)
         {
             Locker lock(camera);
             Image* image = camera->GetCapturedImage();
+
+            if (!image)
+            {
+                LOGWARN(L"Capture complete but no image available");
+                info->status = (DWORD)CaptureStatus::Failed;
+                camera->CleanupCapture();
+
+                return ERROR_SUCCESS;
+            }
 
             info->size = image->GetImageDataSize();
             info->data = exportBytes(image->GetImageData(), image->GetImageDataSize());
@@ -1009,6 +1037,14 @@ GetPortableDeviceInfo(DWORD offset, PORTABLEDEVICEINFO* pdinfo)
     }
 
     std::list<Device*> deviceList = deviceManager->GetAllDevices(false);
+
+    if (offset >= deviceList.size())
+    {
+        LOGWARN(L"Out: GetPortableDeviceInfo(x%08x, @ x%08p) - Device Not Found", offset, pdinfo);
+
+        return ERROR_NOT_FOUND;
+    }
+
     std::list<Device*>::iterator it = deviceList.begin();
 
     std::advance(it, offset);
@@ -1061,6 +1097,14 @@ GetSupportedDeviceInfo(DWORD offset, PORTABLEDEVICEINFO* pdinfo)
     }
 
     std::list<Device*> deviceList = deviceManager->GetFilteredDevices();
+
+    if (offset >= deviceList.size())
+    {
+        LOGWARN(L"Out: GetSupportedDeviceInfo(x%08x, @ x%08p) - Device Not Found", offset, pdinfo);
+
+        return ERROR_NOT_FOUND;
+    }
+
     std::list<Device*>::iterator it = deviceList.begin();
 
     std::advance(it, offset);
@@ -1129,9 +1173,25 @@ GetPropertyList(HANDLE hCamera, DWORD* list, DWORD* listSize)
             return ERROR_RETRY;
         }
 
-        int offset = 0;
+        if (!listSize)
+        {
+            LOGWARN(L"Out: GetPropertyList(x%p, ...) - no list size pointer provided", hCamera);
 
-        for (auto it = cs->cbegin(); it != cs->cend(); it++)
+            return ERROR_INVALID_PARAMETER;
+        }
+
+        if (*listSize < cs->size())
+        {
+            LOGWARN(L"Out: GetPropertyList(x%p, ...) - buffer too small (%d < %d)", hCamera, *listSize, (DWORD)cs->size());
+
+            *listSize = (DWORD)cs->size();
+
+            return ERROR_INSUFFICIENT_BUFFER;
+        }
+
+        DWORD offset = 0;
+
+        for (auto it = cs->cbegin(); it != cs->cend() && offset < *listSize; it++)
         {
             list[offset++] = (DWORD)((*it).first);
         }
@@ -1475,6 +1535,11 @@ GetSinglePropertyValue(HANDLE hCamera, DWORD propertyId, PROPERTYVALUE* value)
 HRESULT
 GetAllPropertyValues(HANDLE hCamera, PROPERTYVALUE* values, DWORD* count)
 {
+    if (!count)
+    {
+        return ERROR_INVALID_PARAMETER;
+    }
+
     Camera* camera = GetCameraManager()->GetCameraForHandle(hCamera);
 
     if (!camera)
@@ -1566,6 +1631,11 @@ SetExposureTime(HANDLE hCamera, float desired, PROPERTYVALUE* valueOut)
         float longestNonBulb = 0.0;
 
         if (exposureTimes.empty())
+        {
+            return ERROR_NOT_SUPPORTED;
+        }
+
+        if (exposureTimes.size() < 2)
         {
             return ERROR_NOT_SUPPORTED;
         }
