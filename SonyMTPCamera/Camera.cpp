@@ -760,9 +760,21 @@ Camera::StartCapture(double duration, OutputMode outputMode, DWORD /*flags*/)
         throw CameraException(L"Could not fetch shutter button status");
     }
 
-    if (shutterButtonStatus->GetUINT8() == 1)
+    // Newer bodies (a6700) report drive mode as 32-bit and use 0xd213 as "focus found", not the
+    // shutter button, so it reads >1 after any AF lock and says nothing about the shutter.
+    CameraProperty* driveMode = cs->GetProperty(Property::StillCaptureMode);
+    bool d213IsFocusFound = driveMode && driveMode->GetInfo() && driveMode->GetInfo()->GetType() == DataType::UINT32;
+
+    if (d213IsFocusFound || shutterButtonStatus->GetUINT8() == 1)
     {
-        LOGTRACE(L"  Shutter button is UP");
+        if (d213IsFocusFound)
+        {
+            LOGTRACE(L"  0xd213 is focus indication on this body (%s); not checking it for the shutter", shutterButtonStatus->ToString().c_str());
+        }
+        else
+        {
+            LOGTRACE(L"  Shutter button is UP");
+        }
 
         PropertyValue* exposureTime = cs->GetPropertyValue(Property::ShutterSpeed);
 

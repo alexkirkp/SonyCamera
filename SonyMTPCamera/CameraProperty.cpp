@@ -695,7 +695,7 @@ PercentageProperty::AsString(PropertyValue* in) const
     return builder.str();
 }
 
-std::unordered_map<DWORD, WORD> StringLookupProperty::_resourceMap;
+std::unordered_map<unsigned long long, WORD> StringLookupProperty::_resourceMap;
 
 StringLookupProperty::StringLookupProperty()
     : CameraProperty()
@@ -797,6 +797,37 @@ StringLookupProperty::StringLookupProperty()
         AddResource(Property::StillCaptureMode, 0x8019, IDS_STILLCAPMODE_DROBRKT_LO);
         AddResource(Property::StillCaptureMode, 0x8029, IDS_STILLCAPMODE_DROBRKT_HI);
 
+        // a6700 (32-bit) drive modes, from the Creators' App tables
+        AddResource(Property::StillCaptureMode, 0x00018010, IDS_STILLCAPMODE_A_CONTINUOUSHIPLUS);
+        AddResource(Property::StillCaptureMode, 0x00010002, IDS_STILLCAPMODE_A_CONTINUOUSHI);
+        AddResource(Property::StillCaptureMode, 0x00018015, IDS_STILLCAPMODE_A_CONTINUOUSMID);
+        AddResource(Property::StillCaptureMode, 0x00018012, IDS_STILLCAPMODE_A_CONTINUOUSLO);
+        AddResource(Property::StillCaptureMode, 0x00038005, IDS_STILLCAPMODE_A_SELFSINGLE_2);
+        AddResource(Property::StillCaptureMode, 0x00038003, IDS_STILLCAPMODE_A_SELFSINGLE_5);
+        AddResource(Property::StillCaptureMode, 0x00038004, IDS_STILLCAPMODE_A_SELFSINGLE_10);
+        AddResource(Property::StillCaptureMode, 0x00088008, IDS_STILLCAPMODE_A_SELFCONT_10_3);
+        AddResource(Property::StillCaptureMode, 0x00088009, IDS_STILLCAPMODE_A_SELFCONT_10_5);
+        AddResource(Property::StillCaptureMode, 0x0008800c, IDS_STILLCAPMODE_A_SELFCONT_5_3);
+        AddResource(Property::StillCaptureMode, 0x0008800d, IDS_STILLCAPMODE_A_SELFCONT_5_5);
+        AddResource(Property::StillCaptureMode, 0x0008800e, IDS_STILLCAPMODE_A_SELFCONT_2_3);
+        AddResource(Property::StillCaptureMode, 0x0008800f, IDS_STILLCAPMODE_A_SELFCONT_2_5);
+
+        // a6700 (32-bit) exposure modes
+        AddResource(Property::ExposureProgramMode, 0x00010002, IDS_FUNCTIONALMODE_P);
+        AddResource(Property::ExposureProgramMode, 0x00020003, IDS_FUNCTIONALMODE_A);
+        AddResource(Property::ExposureProgramMode, 0x00030004, IDS_FUNCTIONALMODE_S);
+        AddResource(Property::ExposureProgramMode, 0x00048000, IDS_FUNCTIONALMODE_A_IAUTO);
+        AddResource(Property::ExposureProgramMode, 0x00048001, IDS_FUNCTIONALMODE_A_SUPERIOR);
+
+        // Silent mode, save destination, mode dial priority (a6700 and later)
+        AddResource(Property::SilentMode, 0x0001, IDS_OFF);
+        AddResource(Property::SilentMode, 0x0002, IDS_ON);
+        AddResource(Property::SaveDestination, 0x0001, IDS_SAVEDEST_PC);
+        AddResource(Property::SaveDestination, 0x0010, IDS_SAVEDEST_CARD);
+        AddResource(Property::SaveDestination, 0x0011, IDS_SAVEDEST_PCCARD);
+        AddResource(Property::PositionKeySetting, 0x0000, IDS_POSITIONKEY_CAMERA);
+        AddResource(Property::PositionKeySetting, 0x0001, IDS_POSITIONKEY_PC);
+
         // Functional Mode
         AddResource(Property::ExposureProgramMode, 0x8001, IDS_FUNCTIONALMODE_AUTO);
         AddResource(Property::ExposureProgramMode, 0x8015, IDS_FUNCTIONALMODE_SCENE);
@@ -874,49 +905,45 @@ StringLookupProperty::Clone()
 }
 
 void
-StringLookupProperty::AddResource(Property property, WORD value, WORD resid)
+StringLookupProperty::AddResource(Property property, DWORD value, WORD resid)
 {
-    StringLookupProperty::_resourceMap.insert(std::pair<DWORD, WORD>(((DWORD)property << 16) + (DWORD)value, resid));
+    StringLookupProperty::_resourceMap.insert(std::pair<unsigned long long, WORD>(((unsigned long long)property << 32) | value, resid));
 }
 
 std::wstring
 StringLookupProperty::AsString(PropertyValue* in) const
 {
     // Currently this only works for unsigned 8, 16, 32 bit values
-    DWORD lookup = static_cast<DWORD>(-1);
+    DWORD value = 0;
     std::wstring result = L"<unable to lookup>";
 
     switch (m_info->GetType())
     {
     case DataType::UINT8:
-        lookup = (DWORD)in->GetUINT8();
+        value = (DWORD)in->GetUINT8();
         break;
 
     case DataType::UINT16:
-        lookup = (DWORD)in->GetUINT16();
+        value = (DWORD)in->GetUINT16();
         break;
 
     case DataType::UINT32:
-        lookup = (DWORD)in->GetUINT32();
+        value = (DWORD)in->GetUINT32();
         break;
 
     default:
-        LOGERROR(L"Invalid datatype when slurping: %d", m_info->GetType());
-        throw;
-        break;
+        // Not a width we can label; show the raw value rather than failing the whole property read
+        LOGWARN(L"StringLookupProperty: unsupported datatype %d for property x%04x", m_info->GetType(), m_info->GetId());
+        return CameraProperty::AsString(in);
     }
 
-    if (lookup >= 0)
+    auto found = StringLookupProperty::_resourceMap.find(((unsigned long long)m_info->GetId() << 32) | value);
+
+    result = found != StringLookupProperty::_resourceMap.end() ? ResourceLoader::GetString(found->second) : std::wstring();
+
+    if (result.empty())
     {
-        lookup = ((DWORD)m_info->GetId() << 16) + lookup;
-        lookup = StringLookupProperty::_resourceMap[lookup];
-
-        result = ResourceLoader::GetString(lookup);
-
-        if (result.empty())
-        {
-            result = CameraProperty::AsString(in);
-        }
+        result = CameraProperty::AsString(in);
     }
 
     return result;
@@ -946,6 +973,9 @@ CameraPropertyFactory::CameraPropertyFactory()
     AddCreator(Property::DROAutoHDR, &pCreate<StringLookupProperty>);
     AddCreator(Property::LiveView, &pCreate<StringLookupProperty>);
     AddCreator(Property::FocusMode, &pCreate<StringLookupProperty>);
+    AddCreator(Property::SilentMode, &pCreate<StringLookupProperty>);
+    AddCreator(Property::SaveDestination, &pCreate<StringLookupProperty>);
+    AddCreator(Property::PositionKeySetting, &pCreate<StringLookupProperty>);
     AddCreator(Property::FlashExposureLock, &pCreate<StringLookupProperty>);
     AddCreator(Property::AutoExposureLock, &pCreate<StringLookupProperty>);
     AddCreator(Property::AutoWhileBalanceLock, &pCreate<StringLookupProperty>);

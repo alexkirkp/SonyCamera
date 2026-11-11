@@ -116,9 +116,10 @@ public:
     virtual std::wstring AsString(PropertyValue* in) const;
 
 protected:
-    void AddResource(Property property, WORD value, WORD resid);
+    // Key is (property << 32) | value so that 32-bit values (a6700 drive and exposure modes) fit
+    void AddResource(Property property, DWORD value, WORD resid);
 
-    static std::unordered_map<DWORD, WORD> _resourceMap;
+    static std::unordered_map<unsigned long long, WORD> _resourceMap;
 };
 
 template< typename T > CameraProperty* pCreate()

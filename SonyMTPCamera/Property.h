@@ -78,22 +78,26 @@ enum class Property {
     Artist                      = 0x501e,
     CopyrightInfo               = 0x501f,
 
+    SilentMode                  = 0xd0db,  // 1 = off, 2 = on (silent mode removes BULB from the shutter list)
+
     FlashCompensation           = 0xd200,
     DROAutoHDR                  = 0xd201, // **  on = 1, off = 31
     JPEGImageSize               = 0xd203,
     ShutterSpeed                = 0xd20d,
     CustomWhiteBalance          = 0xd20f,
     AspectRatio                 = 0xd211,
-    ShutterButtonStatus         = 0xd213,
+    ShutterButtonStatus         = 0xd213,  // Older bodies. On the a6700 this is FocusFound (1 = no focus, higher = focus found)
+    FocusFound                  = 0xd213,  // a6700 name for the same code; never treat it as "finger on shutter" there
     PhotoBufferStatus           = 0xd215,
     AutoExposureLock            = 0xd217,  //** NEW Off = 1, On = 2
     Battery                     = 0xd218,
     FlashExposureLock           = 0xd219, //** NEW Off = 1, On = 2
-    Aperture                    = 0xd21d,
+    Aperture                    = 0xd21d,  // Older bodies only. The a6700 reports aperture in FNumber (0x5007) and uses this as MovieRecording
+    MovieRecording              = 0xd21d,  // a6700 name for the same code: 0 = idle, 1 = recording
     ISO                         = 0xd21e,
     //                          = 0xd21f,
     //                          = 0xd221, // Power? 1 = on, 0 = off ??  Saw it go to 0 once when camera switched off just prior to disconnect
-    //                          = 0xd222,
+    SaveDestination             = 0xd222,  // 0x01 PC only, 0x10 card only, 0x11 PC + card
     FocusArea                   = 0xd22c,
     FocusAssistMode             = 0xd22d,
     //                          = 0xd22e,
@@ -107,6 +111,7 @@ enum class Property {
     AutoWhileBalanceLock        = 0xd24e, //** NEW Off = 1, On = 2
     //IntervalShooting          = 0xd24f,
     //                          = 0xd250,
+    PositionKeySetting          = 0xd25a,  // 0 = mode dial decides, 1 = PC decides (must be 1 before writing the exposure mode)
 
     // Buttons (push then release to invoke feature)
     ShutterHalfDown             = 0xd2c1,
