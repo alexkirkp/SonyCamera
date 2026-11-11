@@ -1240,7 +1240,7 @@ GetPropertyDescriptor(HANDLE hCamera, DWORD propertyId, PROPERTYDESCRIPTOR* desc
 
             descriptor->id = propertyId;
             descriptor->type = (WORD)info->GetType();
-            descriptor->flags = (WORD)((WORD)info->GetAccess() || ((WORD)info->GetSonySpare() << 8));
+            descriptor->flags = (WORD)((WORD)info->GetAccess() | ((WORD)info->GetSonySpare() << 8));
             descriptor->name = exportString(name.empty() ? L"?" : name);
             descriptor->valueCount = info->GetFormMode() == FormMode::ENUMERATION ? info->GetEnumeration().size() : 0;
 
