@@ -42,3 +42,52 @@ SyncShippedDefaults(Registry& reg, const CameraDefaults& table)
 
     return true;
 }
+
+static void
+RemoveEmptyKeys(Registry& reg, std::wstring path)
+{
+    // Stop at the Cameras / Lenses roots (no backslash left): those stay.
+    while (path.find(L'\\') != std::wstring::npos && reg.DeleteKeyIfEmpty(path))
+    {
+        path.erase(path.rfind(L'\\'));
+    }
+}
+
+int
+MigrateLegacyDefaults(Registry& reg, const CameraDefaults& legacy)
+{
+    const DWORD migrated = 1;
+    const DWORD missing = 0;
+
+    if (reg.GetDWORD(kLayer, L"MigratedFrom", missing) == migrated)
+    {
+        return 0;
+    }
+
+    int removed = 0;
+
+    for (const DefaultKey& key : legacy.Keys())
+    {
+        for (const DefaultValue& v : key.values)
+        {
+            bool isDword = false;
+            DWORD dword = 0;
+            std::wstring text;
+
+            if (reg.ReadValue(key.path, v.name, isDword, dword, text) &&
+                isDword == v.isDword &&
+                (isDword ? dword == v.dword : text == v.text) &&
+                reg.DeleteValue(key.path, v.name))
+            {
+                removed++;
+            }
+        }
+
+        RemoveEmptyKeys(reg, key.path);
+    }
+
+    // Last, so an interrupted run is simply repeated (it is idempotent).
+    reg.SetDWORD(kLayer, L"MigratedFrom", migrated);
+
+    return removed;
+}

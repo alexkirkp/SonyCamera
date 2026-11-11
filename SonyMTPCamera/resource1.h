@@ -4,6 +4,7 @@
 //
 
 #define IDR_CAMERA_DEFAULTS             301
+#define IDR_LEGACY_DEFAULTS             302
 
 // Next default values for new objects
 // 

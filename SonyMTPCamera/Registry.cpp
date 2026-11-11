@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "Registry.h"
+#include <vector>
 
 Registry::Registry(std::wstring root)
     : m_root(root)
@@ -182,6 +183,89 @@ Registry::DeleteTree(std::wstring path)
     LSTATUS hr = RegDeleteTree(m_hk, path.c_str());
 
     return hr == ERROR_SUCCESS || hr == ERROR_FILE_NOT_FOUND;
+}
+
+bool
+Registry::ReadValue(std::wstring path, std::wstring value, bool& isDword, DWORD& dword, std::wstring& text)
+{
+    std::lock_guard<std::recursive_mutex> guard(m_mutex);
+
+    DWORD type = 0;
+    DWORD size = 0;
+
+    if (RegGetValue(m_hk, path.c_str(), value.c_str(), RRF_RT_REG_SZ | RRF_RT_REG_DWORD, &type, nullptr, &size) != ERROR_SUCCESS)
+    {
+        return false;
+    }
+
+    if (type == REG_DWORD)
+    {
+        size = sizeof(DWORD);
+        isDword = true;
+        text.clear();
+
+        return RegGetValue(m_hk, path.c_str(), value.c_str(), RRF_RT_REG_DWORD, nullptr, &dword, &size) == ERROR_SUCCESS;
+    }
+
+    isDword = false;
+    dword = 0;
+
+    std::vector<wchar_t> buf(size / sizeof(wchar_t) + 1, 0);
+
+    if (RegGetValue(m_hk, path.c_str(), value.c_str(), RRF_RT_REG_SZ, nullptr, buf.data(), &size) != ERROR_SUCCESS)
+    {
+        return false;
+    }
+
+    text = buf.data();
+
+    return true;
+}
+
+bool
+Registry::DeleteValue(std::wstring path, std::wstring value)
+{
+    std::lock_guard<std::recursive_mutex> guard(m_mutex);
+
+    HKEY hk = nullptr;
+
+    if (RegOpenKeyEx(m_hk, path.c_str(), 0, KEY_SET_VALUE, &hk) != ERROR_SUCCESS)
+    {
+        return false;
+    }
+
+    LSTATUS hr = RegDeleteValue(hk, value.c_str());
+
+    RegCloseKey(hk);
+
+    return hr == ERROR_SUCCESS;
+}
+
+bool
+Registry::DeleteKeyIfEmpty(std::wstring path)
+{
+    std::lock_guard<std::recursive_mutex> guard(m_mutex);
+
+    HKEY hk = nullptr;
+
+    if (RegOpenKeyEx(m_hk, path.c_str(), 0, KEY_READ, &hk) != ERROR_SUCCESS)
+    {
+        return true;
+    }
+
+    DWORD subKeys = 0;
+    DWORD values = 0;
+    LSTATUS hr = RegQueryInfoKey(hk, nullptr, nullptr, nullptr, &subKeys, nullptr, nullptr, &values, nullptr, nullptr, nullptr, nullptr);
+
+    RegCloseKey(hk);
+
+    // RegDeleteKey fails on a key with subkeys, but check explicitly so the intent is clear.
+    if (hr != ERROR_SUCCESS || subKeys != 0 || values != 0)
+    {
+        return false;
+    }
+
+    return RegDeleteKey(m_hk, path.c_str()) == ERROR_SUCCESS;
 }
 
 std::list<std::wstring>

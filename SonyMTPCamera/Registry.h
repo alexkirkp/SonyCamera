@@ -22,6 +22,13 @@ public:
     // Deletes a key and everything under it (relative to the root). True if it is gone.
     bool DeleteTree(std::wstring path);
 
+    // Raw access to one key of the user layer, with no fallback to the shipped layer (used by the
+    // migration). ReadValue returns false if the value is absent or neither a string nor a DWORD.
+    bool ReadValue(std::wstring path, std::wstring value, bool& isDword, DWORD& dword, std::wstring& text);
+    bool DeleteValue(std::wstring path, std::wstring value);
+    // Deletes the key only if it holds no values and no subkeys. True if it is gone.
+    bool DeleteKeyIfEmpty(std::wstring path);
+
     bool SetString(HKEY hk, std::wstring value, std::wstring setting);
     bool SetString(std::wstring path, std::wstring value, std::wstring setting);
     bool SetDWORD(HKEY hk, std::wstring value, DWORD setting);

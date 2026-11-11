@@ -1,5 +1,6 @@
 #pragma once
 #include "pch.h"
+#include "resource1.h"
 #include <string>
 #include <vector>
 
@@ -27,8 +28,9 @@ public:
     // Parses UTF-8 text. On failure returns false and sets error (line number and reason).
     static bool Parse(const std::string& text, CameraDefaults& out, std::string& error);
 
-    // Parses the table embedded in the DLL as the CAMERA_DEFAULTS resource.
-    static bool LoadEmbedded(CameraDefaults& out, std::string& error);
+    // Parses a table embedded in the DLL as an RCDATA resource: IDR_CAMERA_DEFAULTS (the shipped
+    // table) or IDR_LEGACY_DEFAULTS (what old builds wrote into the user layer).
+    static bool LoadEmbedded(CameraDefaults& out, std::string& error, int resourceId = IDR_CAMERA_DEFAULTS);
 
     const std::vector<DefaultKey>& Keys() const { return m_keys; }
 

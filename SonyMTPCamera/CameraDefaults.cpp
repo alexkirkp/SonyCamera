@@ -396,15 +396,15 @@ CameraDefaults::Parse(const std::string& text, CameraDefaults& out, std::string&
 }
 
 bool
-CameraDefaults::LoadEmbedded(CameraDefaults& out, std::string& error)
+CameraDefaults::LoadEmbedded(CameraDefaults& out, std::string& error, int resourceId)
 {
-    HRSRC res = FindResource(dllInstance, MAKEINTRESOURCE(IDR_CAMERA_DEFAULTS), RT_RCDATA);
+    HRSRC res = FindResource(dllInstance, MAKEINTRESOURCE(resourceId), RT_RCDATA);
     HGLOBAL mem = res ? LoadResource(dllInstance, res) : nullptr;
     const char* data = mem ? (const char*)LockResource(mem) : nullptr;
 
     if (data == nullptr)
     {
-        error = "CAMERA_DEFAULTS resource not found";
+        error = "defaults resource not found";
         return false;
     }
 

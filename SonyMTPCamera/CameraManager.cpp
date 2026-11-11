@@ -43,9 +43,29 @@ CameraManager::SetupSupportedDevices()
     {
         LOGERROR(L"Unable to load the camera defaults table: %S", error.c_str());
     }
-    else if (SyncShippedDefaults(registry, table))
+    else
     {
-        LOGINFO(L"Camera defaults table written (version x%08x)", table.Version());
+        // Before anything reads the registry: old builds' defaults must not act as overrides.
+        CameraDefaults legacy;
+
+        if (!CameraDefaults::LoadEmbedded(legacy, error, IDR_LEGACY_DEFAULTS))
+        {
+            LOGERROR(L"Unable to load the legacy camera defaults table: %S", error.c_str());
+        }
+        else
+        {
+            int removed = MigrateLegacyDefaults(registry, legacy);
+
+            if (removed > 0)
+            {
+                LOGINFO(L"Migrated old camera defaults: removed %d legacy values from the user layer", removed);
+            }
+        }
+
+        if (SyncShippedDefaults(registry, table))
+        {
+            LOGINFO(L"Camera defaults table written (version x%08x)", table.Version());
+        }
     }
 
     registry.Close();
