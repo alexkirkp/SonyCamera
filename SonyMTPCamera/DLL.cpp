@@ -1361,7 +1361,12 @@ SetPropertyValue(HANDLE hCamera, DWORD propertyId, DWORD value)
                 SetPropertyTaskParams params((Property)propertyId, val);
                 SetPropertyTask task(&params);
 
-                task.Run(camera);
+                if (!task.Run(camera))
+                {
+                    LOGWARN(L"Out: SetPropertyValue - setting property x%04x failed", propertyId);
+
+                    return ERROR_CAN_NOT_COMPLETE;
+                }
             }
             else
             {

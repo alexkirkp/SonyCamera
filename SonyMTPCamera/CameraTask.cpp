@@ -4,6 +4,8 @@
 #include "CameraWorkerFunctions.h"
 #include "Camera.h"
 #include "Logger.h"
+#include "CameraException.h"
+#include <exception>
 
 class CameraWorker;
 
@@ -207,14 +209,34 @@ CameraTask::Step(CameraTaskInfo& info)
             stepInfo.isActive = true;
         }
 
-        // Should put this in try/catch
         std::wstring taskName = info.pTask->Name();
         std::wstring stepName = !stepInfo.name.empty() ? stepInfo.name : L"<unknown>";
 
 #ifdef DEBUG
         LOGTRACE(L"Pre: %s.%s", taskName.c_str(), stepName.c_str());
 #endif
-        StateResult result = (stepInfo.handler)(info);
+        // An exception escaping here would terminate the host process; treat it as a failed step
+        StateResult result;
+
+        try
+        {
+            result = (stepInfo.handler)(info);
+        }
+        catch (CameraException& e)
+        {
+            LOGERROR(L"Exception in %s.%s: %s", taskName.c_str(), stepName.c_str(), e.GetMessage().c_str());
+            result = StateResult::Fail;
+        }
+        catch (const std::exception& e)
+        {
+            LOGERROR(L"std::exception in %s.%s: %S", taskName.c_str(), stepName.c_str(), e.what());
+            result = StateResult::Fail;
+        }
+        catch (...)
+        {
+            LOGERROR(L"Unknown exception in %s.%s", taskName.c_str(), stepName.c_str());
+            result = StateResult::Fail;
+        }
 #ifdef DEBUG
         LOGTRACE(L"Post: %s.%s (result = %d)", info.pTask->Name().c_str(), stepName.c_str(), result);
 #endif
