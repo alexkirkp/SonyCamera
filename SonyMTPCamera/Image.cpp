@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "Image.h"
+#include "CropMath.h"
 #pragma warning(push)
 #pragma warning(disable : 4251) // vendored LibRaw header: std types in exported classes
 #include "libraw/libraw.h"
@@ -301,20 +302,30 @@ Image::ProcessARWData()
                     m_cropBottom = m_rawHeight - m_croppedHeight - m_cropTop;
                 }
 
-                ushort width = ushort(m_rawWidth - m_cropLeft - m_cropRight);
-                ushort height = ushort(m_rawHeight - m_cropTop - m_cropBottom);
+                // Sanitise the requested crop: even left/top (keeps the Bayer phase), even width/height
+                // (no write past the end of a row), and never larger than the frame.
+                CropRect rect = ResolveRawCrop((int)m_rawWidth, (int)m_rawHeight, m_cropTop, m_cropLeft, m_cropBottom, m_cropRight);
 
-                LOGINFO(L"Raw size is %d x %d, crop (T,L,R,B) = %d, %d, %d, %d, result will be %d x %d", m_rawWidth, m_rawHeight, m_cropTop, m_cropLeft, m_cropBottom, m_cropRight, width, height);
+                if (rect.adjusted)
+                {
+                    LOGWARN(L"Requested crop (T,L,B,R) = %d, %d, %d, %d adjusted to fit raw size %d x %d", m_cropTop, m_cropLeft, m_cropBottom, m_cropRight, m_rawWidth, m_rawHeight);
+                }
+
+                int width = rect.width;
+                int height = rect.height;
+
+                LOGINFO(L"Raw size is %d x %d, crop (T,L,B,R) = %d, %d, %d, %d, result will be %d x %d", m_rawWidth, m_rawHeight, rect.top, rect.left, (int)m_rawHeight - rect.top - height, (int)m_rawWidth - rect.left - width, width, height);
 
                 m_pixelDataSize = width * height * sizeof(short);
                 m_pixelData = new BYTE[m_pixelDataSize];
 
-                for (int y = m_cropTop; y < int(m_rawHeight - m_cropBottom); y++)
+                for (int y = rect.top; y < rect.top + height; y++)
                 {
                     ushort* pds = (ushort*)m_pixelData;
-                    int readOffset = y * m_rawWidth;
-                    int writeOffset = (m_pixelDataSize / sizeof(short)) - (y - m_cropTop + 1) * width;
+                    int readOffset = y * m_rawWidth + rect.left;
+                    int writeOffset = (m_pixelDataSize / sizeof(short)) - (y - rect.top + 1) * width;
 
+                    // rect.left is even, so the column phase of COLOR() is unchanged
                     int i0 = libraw->COLOR(y, 0);
                     int i1 = libraw->COLOR(y, 1);
 

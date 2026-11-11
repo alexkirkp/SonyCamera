@@ -178,6 +178,7 @@
     <ClInclude Include="CameraWorker.h" />
     <ClInclude Include="CameraWorkerFunctions.h" />
     <ClInclude Include="Device.h" />
+    <ClInclude Include="CropMath.h" />
     <ClInclude Include="ExposureSelection.h" />
     <ClInclude Include="DeviceEnumerator.h" />
     <ClInclude Include="DeviceEventHandler.h" />
