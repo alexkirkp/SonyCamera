@@ -66,10 +66,10 @@ Logger::SetLogFilename(std::wstring filename)
 void
 Logger::Log(LogLevel level, const WCHAR* format, ...)
 {
-    if (level >= m_level)
+    if (IsEnabled(level))
     {
-        // Ensure we don't make messy log
-        if (WaitForSingleObject(m_serializationMutex, 100) == WAIT_OBJECT_0)
+        // Ensure we don't make messy log; wait as long as needed so lines are never dropped
+        if (WaitForSingleObject(m_serializationMutex, INFINITE) == WAIT_OBJECT_0)
         {
             static size_t buffersize = 8192;
             WCHAR* buffer = new WCHAR[buffersize];
@@ -124,7 +124,12 @@ Logger::Log(LogLevel level, const WCHAR* format, ...)
                 WriteFile(s_logFileHandle, buffer, wcslen(buffer) * sizeof(WCHAR), nullptr, nullptr);
                 WriteFile(s_logFileHandle, L"\n", sizeof(WCHAR), nullptr, nullptr);
 
-                FlushFileBuffers(s_logFileHandle);
+                // Only Warn and above are flushed, so they survive a crash; lower levels
+                // are left to the OS cache.
+                if (level >= LogLevel::Warn)
+                {
+                    FlushFileBuffers(s_logFileHandle);
+                }
             }
 
             delete[] buffer;
