@@ -730,7 +730,7 @@ MTPDevice::InternalSend(Device::Op kind, Message* out)
                 bool maximumMemoryMode = (bool)registry.GetDWORD(L"", L"Maximum Memory Mode", 0);
                 registry.Close();
 
-                ULONG bufferSize = maximumMemoryMode ? cbReportedDataSize : min(cbReportedDataSize, max(cbOptimalDataSize * 16, 2 ^ 23));
+                ULONG bufferSize = maximumMemoryMode ? cbReportedDataSize : min(cbReportedDataSize, max(cbOptimalDataSize * 16, (1UL << 23)));
 //                LOGTRACE(L"Using a transfer buffer of %d bytes (maxmum memory mode is %s)", bufferSize, maximumMemoryMode ? L"ON" : L"OFF");
 
                 BYTE* pbBufferIn = NULL;
