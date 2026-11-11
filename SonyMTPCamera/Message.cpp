@@ -15,7 +15,9 @@ Message::Message(WORD command)
 
 Message::Message(const Message& rhs)
     : m_command(rhs.m_command),
-      m_dataLen(rhs.m_dataLen)
+      m_params(rhs.m_params),
+      m_dataLen(rhs.m_dataLen),
+      m_writeOffset(rhs.m_writeOffset)
 {
 #ifdef DEBUG
     LOGTRACE(L"Message::Message(rhs(command = x%04x, dataLen = x%08x)) [this = x%08p]", rhs.m_command, rhs.m_dataLen, this);

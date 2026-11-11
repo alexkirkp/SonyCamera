@@ -167,6 +167,10 @@ extern "C" {
 
     /* Functions for Focus Control */
     IMPEXP HRESULT SetFocusPosition(HANDLE hCamera, DWORD* position);
+    /* GetFocusPosition/GetFocusLimit return a UINT16-range value on success and
+       FOCUS_ERROR (0xFFFFFFFF) if the handle is invalid. (Previously they returned
+       ERROR_INVALID_HANDLE (6), which collided with a real position.) */
+#define FOCUS_ERROR 0xFFFFFFFFUL
     IMPEXP DWORD GetFocusPosition(HANDLE hCamera);
     IMPEXP DWORD GetFocusLimit(HANDLE hCamera);
 

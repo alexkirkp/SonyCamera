@@ -157,10 +157,10 @@ exportBytes(BYTE* buffer, DWORD bufferLen)
 static void
 RenderProperty(Property id, const CameraProperty* property, PROPERTYVALUE* output)
 {
-    if (property)
-    {
-        PropertyValue* value = property->GetCurrentValue();
+    PropertyValue* value = property ? property->GetCurrentValue() : nullptr;
 
+    if (value)
+    {
         switch (value->GetType())
         {
         case DataType::UINT8:
@@ -484,6 +484,8 @@ GetPreviewImage(HANDLE hCamera, IMAGEINFO *info)
 
                 info->metaDataSize = image->GetMetaDataSize();
 
+                info->metaData = nullptr;
+
                 if (info->metaDataSize)
                 {
                     info->metaData = exportBytes(image->GetMetaData(), info->metaDataSize);
@@ -712,7 +714,12 @@ static bool NudgePropertyAndWait(Camera* camera, CameraProperty* desired, bool u
     }
 
     // This will nudge the property in hopefully the correct direction
-    LOGTRACE(L"Property x%04x is set to %s, nudging %s toward %s", desired->GetId(), current->GetCurrentValue()->ToString().c_str(), val.ToString().c_str(), desired->GetCurrentValue()->ToString().c_str());
+    PropertyValue* currentValue = current->GetCurrentValue();
+    PropertyValue* desiredValue = desired->GetCurrentValue();
+
+    LOGTRACE(L"Property x%04x is set to %s, nudging %s toward %s", desired->GetId(),
+        currentValue ? currentValue->ToString().c_str() : L"(unknown)", val.ToString().c_str(),
+        desiredValue ? desiredValue->ToString().c_str() : L"(unknown)");
     SetPropertyTaskParams params(desired->GetId(), val);
     SetPropertyTask task(&params);
 
@@ -1740,7 +1747,7 @@ GetFocusLimit(HANDLE hCamera)
 
     if (!camera)
     {
-        return ERROR_INVALID_HANDLE;
+        return FOCUS_ERROR;
     }
 
     return camera->GetFocusLimit();
@@ -1773,7 +1780,7 @@ GetFocusPosition(HANDLE hCamera)
 
     if (!camera)
     {
-        return ERROR_INVALID_HANDLE;
+        return FOCUS_ERROR;
     }
 
     return camera->GetFocus();
@@ -1782,6 +1789,11 @@ GetFocusPosition(HANDLE hCamera)
 HRESULT
 SetFocusPosition(HANDLE hCamera, DWORD* focusPosition)
 {
+    if (!focusPosition)
+    {
+        return ERROR_INVALID_PARAMETER;
+    }
+
     //#ifdef DEBUG
     LOGTRACE(L"In: SetFocusPosition(x%p, %d)", hCamera, *focusPosition);
     //#endif
@@ -1850,6 +1862,11 @@ IMPEXP DWORD GetLensCount()
 
 IMPEXP HRESULT GetLensInfo(DWORD offset, LENSINFO* plinfo)
 {
+    if (!plinfo)
+    {
+        return ERROR_INVALID_PARAMETER;
+    }
+
     Init();
 
     // Info about the lenses is in registry
@@ -1896,6 +1913,11 @@ IMPEXP HRESULT GetLensInfo(DWORD offset, LENSINFO* plinfo)
 
 IMPEXP HRESULT SetAttachedLens(HANDLE hCamera, LPWSTR lensId)
 {
+    if (!lensId)
+    {
+        return ERROR_INVALID_PARAMETER;
+    }
+
     //#ifdef DEBUG
     LOGTRACE(L"In: SetAttachedLens(x%p, %s)", hCamera, lensId);
     //#endif

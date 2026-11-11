@@ -854,7 +854,14 @@ Camera::GetSettings() const
 
     if (guard)
     {
-        result = new CameraSettings(*m_settings);
+        if (m_settings)
+        {
+            result = new CameraSettings(*m_settings);
+        }
+        else
+        {
+            LOGWARN(L"Camera::GetSettings: settings have not been loaded yet");
+        }
     }
     else
     {
@@ -872,7 +879,7 @@ Camera::GetProperty(Property id) const
 
     if (guard)
     {
-        CameraProperty* existing = m_settings->GetProperty(id);
+        CameraProperty* existing = m_settings ? m_settings->GetProperty(id) : nullptr;
 
         if (existing)
         {
@@ -988,7 +995,7 @@ Camera::GetCapturedImage()
         // Update a couple of settings based on some EXIF data read from the image
         MutexGuard exifGuard(m_hBusyMutex, 1000);
 
-        if (exifGuard)
+        if (exifGuard && m_settings)
         {
             LOGTRACE(L"Updating temperature and focus properties from EXIF");
 
@@ -1016,7 +1023,7 @@ Camera::GetCapturedImage()
         }
         else
         {
-            LOGWARN(L"Camera::GetCapturedImage: timed out waiting for the lock, skipping EXIF property update");
+            LOGWARN(L"Camera::GetCapturedImage: lock timed out or settings not loaded, skipping EXIF property update");
         }
 
         return image;

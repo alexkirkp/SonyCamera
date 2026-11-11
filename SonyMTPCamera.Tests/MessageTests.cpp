@@ -238,3 +238,18 @@ TEST(Message_ParamsAndSuccessCode)
     Message other(0x2002);
     CHECK(!other.IsSuccess());
 }
+
+TEST(Message_CopyKeepsParamsAndWriteOffset)
+{
+    BYTE raw[] = { 1, 2, 3, 4 };
+    Message m(COMMAND_RESULT_SUCCESS);
+    m.AddParam(7);
+    m.AddParam(9);
+    m.SetData(raw, sizeof(raw));
+
+    Message copy(m);
+
+    CHECK((copy.GetParams() == std::list<DWORD>{ 7, 9 }));
+    CHECK_EQ(copy.GetDataLen(), 4u);
+    CHECK(copy.GetData() != m.GetData());
+}
