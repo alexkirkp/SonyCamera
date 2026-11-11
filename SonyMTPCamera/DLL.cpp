@@ -705,7 +705,7 @@ GetAvailablePropertyValues(HANDLE hCamera, Camera* camera, Property propertyId, 
         throw CameraException(L"Unable to learn property values, the camera does not have that property");
     }
 
-    CameraProperty* desired = current->Clone();
+    std::unique_ptr<CameraProperty> desired(current->Clone());
 
     switch (current->GetInfo()->GetType())
     {
@@ -746,8 +746,8 @@ GetAvailablePropertyValues(HANDLE hCamera, Camera* camera, Property propertyId, 
     // then down, and finally try the actual "detect" part.
     Sleep(1000);
 
-    NudgePropertyAndWait(camera, desired, true, &compareResult);
-    NudgePropertyAndWait(camera, desired, false, &compareResult);
+    NudgePropertyAndWait(camera, desired.get(), true, &compareResult);
+    NudgePropertyAndWait(camera, desired.get(), false, &compareResult);
 
     // Moves to lowest possible value
     SetPropertyValue(hCamera, (DWORD)propertyId, startAt);
@@ -758,13 +758,11 @@ GetAvailablePropertyValues(HANDLE hCamera, Camera* camera, Property propertyId, 
 
     if (!current)
     {
-        delete desired;
-
         throw CameraException(L"Unable to learn property values, the property is no longer available");
     }
 
     bool adjusted;
-    int expectedCompareResult = current->Compare(desired);
+    int expectedCompareResult = current->Compare(desired.get());
 
     do
     {
@@ -773,8 +771,6 @@ GetAvailablePropertyValues(HANDLE hCamera, Camera* camera, Property propertyId, 
 
         if (!val)
         {
-            delete desired;
-
             throw CameraException(L"Unable to learn property values, the property value is no longer available");
         }
 
@@ -808,10 +804,8 @@ GetAvailablePropertyValues(HANDLE hCamera, Camera* camera, Property propertyId, 
             throw CameraException(L"Unable to set property, only properties with int/uint 8/16/32 supported");
         }
 
-        adjusted = NudgePropertyAndWait(camera, desired, true, &compareResult);
+        adjusted = NudgePropertyAndWait(camera, desired.get(), true, &compareResult);
     } while (adjusted && compareResult == expectedCompareResult);
-
-    delete desired;
 
     return values;
 }

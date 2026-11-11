@@ -1014,4 +1014,24 @@ void
 Camera::CleanupCapture()
 {
     CancelCapture();
+
+    // Release the downloaded image once it has been collected (callers must be finished with
+    // any Image* from GetCapturedImage before calling this). Take the task over under the lock,
+    // wait for it outside it, as StartCapture does.
+    DownloadAndProcessImageTask* downloadTask = nullptr;
+
+    if (WaitForSingleObject(m_hBusyMutex, 1000) == WAIT_OBJECT_0)
+    {
+        downloadTask = m_downloadAndProcessImageTask;
+        m_downloadAndProcessImageTask = nullptr;
+        ReleaseMutex(m_hBusyMutex);
+    }
+
+    // The params stay owned by the camera; StartCapture frees them. If the task will not stop,
+    // DisposeTask leaks it rather than free memory the worker may still use.
+    if (!DisposeTask(downloadTask) && WaitForSingleObject(m_hBusyMutex, 1000) == WAIT_OBJECT_0)
+    {
+        m_takePhotoTaskParams = nullptr;
+        ReleaseMutex(m_hBusyMutex);
+    }
 }

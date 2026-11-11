@@ -631,8 +631,6 @@ Image::SaveFile(std::wstring path)
 
     if (path.empty())
     {
-        registry.Open();
-
         std::wostringstream builder;
 
         if (registry.GetDWORD(L"", L"File Auto Save", 0))
@@ -705,9 +703,10 @@ Image::SaveFile(std::wstring path)
 
             path = s_savePath;
         }
-
-        registry.Close();
     }
+
+    // Matches the Open() at the top of the function
+    registry.Close();
 
     if (!path.empty())
     {

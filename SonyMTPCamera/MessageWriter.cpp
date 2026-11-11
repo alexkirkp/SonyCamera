@@ -14,7 +14,7 @@ MessageWriter::~MessageWriter()
 {
     if (m_data)
     {
-        delete[] m_data;
+        free(m_data);   // allocated with realloc in Write()
         m_data = nullptr;
         m_datalen = 0;
     }

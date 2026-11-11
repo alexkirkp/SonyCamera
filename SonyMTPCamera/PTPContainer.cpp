@@ -76,7 +76,7 @@ void PTPContainer::setData(unsigned long dataLen, BYTE * data)
     // We need to get rid of existing data first
     if (this->_data)
     {
-        delete this->_data;
+        delete[] this->_data;
         this->_data = NULL;
         this->_dataLen = 0;
     }

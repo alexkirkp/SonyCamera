@@ -148,15 +148,12 @@ SonyCamera::RefreshSettings(bool refreshFakePropertiesToo)
     LOGTRACE(L"In: SonyCamera::RefreshSettings()");
     #endif
 
-    Message* tx;
-    Message* rx;
-
-    tx = new Message(COMMAND_READ_SETTINGS);
-    rx = m_device->Receive(tx);
+    std::unique_ptr<Message> tx(new Message(COMMAND_READ_SETTINGS));
+    std::unique_ptr<Message> rx(m_device->Receive(tx.get()));
 
     if (rx->IsSuccess())
     {
-        CameraSettings cs = CameraSettings(rx);
+        CameraSettings cs = CameraSettings(rx.get());
 
         // Only need to load up the fakes first time thru
         if (!m_settings || refreshFakePropertiesToo)
@@ -178,10 +175,10 @@ SonyCamera::RefreshSettings(bool refreshFakePropertiesToo)
             }
         }
 
-        ReleaseMutex(m_hBusyMutex);
-
-        delete tx;
-        delete rx;
+        if (waitResult == WAIT_OBJECT_0 || waitResult == WAIT_ABANDONED)
+        {
+            ReleaseMutex(m_hBusyMutex);
+        }
     }
     else
     {
