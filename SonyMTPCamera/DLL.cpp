@@ -908,6 +908,9 @@ ListToString(std::list<DWORD> list)
     return v;
 }
 
+// Upper bound on the probe capture in GetCameraInfo (a full-size test exposure plus download)
+constexpr ULONGLONG PROBE_CAPTURE_TIMEOUT_MS = 60000;
+
 HRESULT
 GetCameraInfo(HANDLE hCamera, CAMERAINFO* info, DWORD flags)
 {
@@ -932,7 +935,14 @@ GetCameraInfo(HANDLE hCamera, CAMERAINFO* info, DWORD flags)
 
             std::wstring cameraPath = builder.str();
 
-            registry.Open();
+            // Balances Open/Close on every path, including exceptions
+            struct RegistryOpen
+            {
+                RegistryOpen() { registry.Open(); m_open = true; }
+                ~RegistryOpen() { Release(); }
+                void Release() { if (m_open) { m_open = false; registry.Close(); } }
+                bool m_open = false;
+            } registryOpen;
 
             if (deviceInfo.GetExposureTimes().empty() && (flags & INFOFLAG_INCLUDE_SETTINGS))
             {
@@ -998,10 +1008,15 @@ GetCameraInfo(HANDLE hCamera, CAMERAINFO* info, DWORD flags)
 //                        memset((BYTE*)&iinfo, 0, sizeof(iinfo));
 
                         // We should be on fastest exposure time, which is perfect for the test shot
-                        camera->StartCapture(0.1, OutputMode::RGGB, 0);
+                        {
+                            // The lock is dropped again before waiting: the capture thread needs it
+                            Locker lock(camera);
+                            camera->StartCapture(0.1, OutputMode::RGGB, 0);
+                        }
 
                         bool done = false;
                         Image* image = nullptr;
+                        const ULONGLONG deadline = GetTickCount64() + PROBE_CAPTURE_TIMEOUT_MS;
 
                         while (!done)
                         {
@@ -1010,16 +1025,25 @@ GetCameraInfo(HANDLE hCamera, CAMERAINFO* info, DWORD flags)
                             case CaptureStatus::Complete:
                                 LOGDEBUG(L"  Capture complete...");
 
-                                image = camera->GetCapturedImage();
-                                image->GetImageDataSize();
+                                {
+                                    Locker lock(camera);
 
-                                registry.SetDWORD(cameraPath, L"Sensor X Resolution", image->GetRawWidth());
-                                registry.SetDWORD(cameraPath, L"Sensor Y Resolution", image->GetRawHeight());
-                                registry.SetDWORD(cameraPath, L"AutoCropped X Resolution", image->GetCroppedWidth());
-                                registry.SetDWORD(cameraPath, L"AutoCropped Y Resolution", image->GetCroppedHeight());
+                                    image = camera->GetCapturedImage();
 
-                                // This deletes image too
-                                camera->CleanupCapture();
+                                    if (image)
+                                    {
+                                        image->GetImageDataSize();
+
+                                        registry.SetDWORD(cameraPath, L"Sensor X Resolution", image->GetRawWidth());
+                                        registry.SetDWORD(cameraPath, L"Sensor Y Resolution", image->GetRawHeight());
+                                        registry.SetDWORD(cameraPath, L"AutoCropped X Resolution", image->GetCroppedWidth());
+                                        registry.SetDWORD(cameraPath, L"AutoCropped Y Resolution", image->GetCroppedHeight());
+                                    }
+
+                                    // This deletes image too
+                                    camera->CleanupCapture();
+                                }
+
                                 done = true;
                                 break;
 
@@ -1029,6 +1053,18 @@ GetCameraInfo(HANDLE hCamera, CAMERAINFO* info, DWORD flags)
                                 break;
 
                             default:
+                                if (GetTickCount64() >= deadline)
+                                {
+                                    LOGERROR(L"GetCameraInfo: timed out waiting for the probe capture");
+                                    {
+                                        Locker lock(camera);
+                                        camera->CancelCapture();
+                                    }
+
+                                    done = true;
+                                    break;
+                                }
+
                                 // Avoid spinning
                                 Sleep(250);
                                 break;
@@ -1038,7 +1074,7 @@ GetCameraInfo(HANDLE hCamera, CAMERAINFO* info, DWORD flags)
                 }
             }
 
-            registry.Close();
+            registryOpen.Release();
 
             // Fetch updated
             RefreshDeviceInfoTask task;
