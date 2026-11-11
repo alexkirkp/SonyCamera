@@ -197,7 +197,8 @@ CameraTask::Step(CameraTaskInfo& info)
         status.currentStep = 0;
     }
 
-    StateStepInfo stepInfo = steps[status.currentStep];
+    // Reference, not a copy: retryCount/isActive must persist between calls to Step
+    StateStepInfo& stepInfo = steps[status.currentStep];
 
     status.currentStepName = stepInfo.name;
 
@@ -280,9 +281,16 @@ CameraTask::Step(CameraTaskInfo& info)
                 if (stepInfo.retryCount >= stepInfo.maxRetries)
                 {
                     result = StateResult::Fail;
-                    status.currentStep = stepInfo.failId;
+                    status.currentStep = stepInfo.failId >= 0 ? stepInfo.failId : stepInfo.successId;
                 }
                 break;
+            }
+
+            if (result != StateResult::Retry)
+            {
+                // Leaving the step: a later visit starts afresh
+                stepInfo.isActive = false;
+                stepInfo.retryCount = 0;
             }
 
             status.currentStepName = L"<pending>";

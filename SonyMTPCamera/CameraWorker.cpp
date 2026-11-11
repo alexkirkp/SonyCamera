@@ -226,14 +226,19 @@ CameraWorker::QueueTask(CameraTask* task, HANDLE waiter)
 
     // If there is a waiter, just queue it up - if there is no waiter, look thru
     // queue and only add if there isn't one of same type
-    if (!waiter)
+    // (QueueAndForget passes INVALID_HANDLE_VALUE, which is what "no waiter" means)
+    if (waiter == INVALID_HANDLE_VALUE || waiter == nullptr)
     {
-        for (const auto queued: queue)
+        for (const auto& queued : queue)
         {
-            if (queued.first->Name() == task->Name())
+            if (queued.second == INVALID_HANDLE_VALUE || queued.second == nullptr)
             {
-                LOGINFO(L"Not queuing task %s as there is already one in queue", task->Name().c_str());
-                task = nullptr;
+                if (queued.first->Name() == task->Name())
+                {
+                    LOGINFO(L"Not queuing task %s as there is already one in queue", task->Name().c_str());
+                    task = nullptr;
+                    break;
+                }
             }
         }
     }
