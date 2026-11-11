@@ -35,6 +35,12 @@ Image::Image(ObjectInfo* info, Message* message)
         m_inputMode = InputMode::JPEG;
         LOGTRACE(L"Image identified as JPEG");
     }
+    else if (ident >= GetDataLength())
+    {
+        // The leading DWORD is an offset to the JPEG; one beyond the data would underflow the length
+        LOGERROR(L"Image offset %u is beyond the data length %u, rejecting image", ident, GetDataLength());
+        m_inputMode = InputMode::UNKNOWN;
+    }
     else
     {
         // Preview images have some cruft at the beginning that I think is
@@ -161,6 +167,9 @@ Image::InitializeLibRaw(bool process)
     if (r != LIBRAW_SUCCESS)
     {
         LOGERROR(L"LibRaw - problem unpacking data %s", LibRawErrorToString(libraw, r).c_str());
+        delete libraw;
+
+        return nullptr;
     }
 
     if (process)
@@ -249,9 +258,11 @@ Image::ProcessARWData()
 
             r = libraw->raw2image();
 
-            if (r != LIBRAW_SUCCESS)
+            if (r != LIBRAW_SUCCESS || !libraw->imgdata.image)
             {
                 LOGERROR(L"Unable to raw2image %s", LibRawErrorToString(libraw, r).c_str());
+                delete libraw;
+                return false;
             }
 
             m_rawWidth = libraw->imgdata.sizes.iwidth;
@@ -755,6 +766,11 @@ Image::SaveFile(std::wstring path)
             {
                 offset = m_imageOffset;
                 size = size - m_imageOffset;
+            }
+            else if (m_inputMode != InputMode::ARW)
+            {
+                LOGWARN(L"Not saving image of unrecognised format");
+                size = 0;
             }
 
             WriteFile(hfile, GetData() + offset, size, &bytesWritten, nullptr);
