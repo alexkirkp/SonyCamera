@@ -203,3 +203,22 @@ TEST(CameraTask_StoresItsParametersAndResult)
     t.SetUserStatus(7);
     CHECK_EQ(t.GetTaskStatus().userStatus, 7);
 }
+
+TEST(CameraTask_UnpreparedCancelReturnsImmediately)
+{
+    TestTask t(ok, 10, 11, 11);
+
+    CHECK_EQ(t.Cancel(50), (DWORD)WAIT_OBJECT_0);
+}
+
+TEST(CameraTask_PreparedCancelWaitsForTheTaskToRun)
+{
+    // A prepared task that is not yet queued must not look disposable: Cancel waits for the
+    // worker to finish it, so an owner cannot delete it before Start() has queued it.
+    TestTask t(ok, 10, 11, 11);
+
+    t.Prepare();
+
+    CHECK(t.GetCancelEventHandle() != INVALID_HANDLE_VALUE);
+    CHECK_EQ(t.Cancel(50), (DWORD)WAIT_TIMEOUT);
+}

@@ -56,6 +56,9 @@ public:
     bool Run(Camera* camera);
     std::wstring Name();
     bool SupportsCameraState(CameraState state);
+    // Create the waiter and cancel handles so Cancel/WaitFor are valid. Call this before
+    // publishing the task to other threads; Start then only has to queue it.
+    void Prepare();
     void Start(Camera* camera);
     bool QueueAndForget(Camera* camera);
     DWORD Cancel(DWORD timeout);

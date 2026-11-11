@@ -174,6 +174,10 @@ Camera::OnImageBufferStatus(ImageBufferStatus status)
         }
 
         DownloadAndProcessImageTask* task = new DownloadAndProcessImageTask(m_takePhotoTaskParams);
+
+        // Prepare before publishing: a StartCapture/CleanupCapture that takes the task in the gap
+        // before Start() then waits for it to be queued and run, instead of deleting it early.
+        task->Prepare();
         m_downloadAndProcessImageTask = task;
 
         ReleaseMutex(m_hBusyMutex);
@@ -582,7 +586,14 @@ Camera::StartCapture(double duration, OutputMode outputMode, DWORD /*flags*/)
 
     DWORD waitResult = WaitForSingleObject(m_hBusyMutex, 1000);
 
-    if (waitResult == WAIT_OBJECT_0)
+    if (waitResult != WAIT_OBJECT_0 && waitResult != WAIT_ABANDONED)
+    {
+        // Without the lock we cannot take over the old tasks, and would later overwrite the
+        // task pointers while OnImageBufferStatus uses them. Fail the call instead.
+        LOGERROR(L"StartCapture: timed out waiting for the camera lock (%d); not starting capture", waitResult);
+        throw CameraException(L"Camera busy, could not start capture");
+    }
+
     {
         oldPhotoTask = m_takePhotoTask;
         oldDownloadTask = m_downloadAndProcessImageTask;
@@ -795,12 +806,26 @@ Camera::StartCapture(double duration, OutputMode outputMode, DWORD /*flags*/)
             LOGTRACE(L"  Shutter time is %s (%f s), we wanted (%f s) - letting camera figure it out", exposureTime->ToString().c_str(), duration, requestedDuration);
         }
 
-        m_takePhotoTaskParams = new TakePhotoTaskParams(duration, outputMode);
-        m_takePhotoTask = new TakePhotoTask(m_takePhotoTaskParams);
+        TakePhotoTaskParams* params = new TakePhotoTaskParams(duration, outputMode);
+        TakePhotoTask* photoTask = new TakePhotoTask(params);
+        photoTask->Prepare();
+
+        // Publish the task pointers under the lock (OnImageBufferStatus reads them)
+        if (WaitForSingleObject(m_hBusyMutex, 1000) != WAIT_OBJECT_0)
+        {
+            delete photoTask;
+            delete params;
+            LOGERROR(L"StartCapture: timed out waiting for the camera lock; not starting capture");
+            throw CameraException(L"Camera busy, could not start capture");
+        }
+
+        m_takePhotoTaskParams = params;
+        m_takePhotoTask = photoTask;
+        ReleaseMutex(m_hBusyMutex);
 
         // doCapture reopens the image-ready window once the shutter is released
         preparing.handedOff = true;
-        m_takePhotoTask->Start(this);
+        photoTask->Start(this);
 
         result = true;
     }

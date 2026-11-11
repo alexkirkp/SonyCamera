@@ -58,6 +58,22 @@ CameraTask::SupportsCameraState(CameraState state)
     return std::find(runStates.begin(), runStates.end(), state) != runStates.end();
 }
 
+void
+CameraTask::Prepare()
+{
+    // Initially unsignalled: the worker releases the waiter when the task completes, so
+    // Cancel/WaitFor really wait for that.
+    if (waiter == INVALID_HANDLE_VALUE)
+    {
+        waiter = CreateSemaphore(nullptr, 0, 1, nullptr);
+    }
+
+    if (cancel == INVALID_HANDLE_VALUE)
+    {
+        cancel = CreateEvent(nullptr, TRUE, FALSE, nullptr);
+    }
+}
+
 DWORD
 CameraTask::Cancel(DWORD timeout)
 {
