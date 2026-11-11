@@ -2,6 +2,7 @@
 #include "pch.h"
 #include "Camera.h"
 #include <queue>
+#include <atomic>
 #include "CameraState.h"
 #include "CameraTask.h"
 
@@ -19,6 +20,9 @@ public:
     ~CameraWorker();
 
     void OnCameraStateChange(CameraState newState);
+    // Never blocks on a running step: the task is queued and this returns at once. A caller that
+    // waits on its own semaphore still waits until the worker reaches its task (i.e. after the
+    // exposure step finishes); the exposure itself is unaffected.
     bool QueueTask(CameraTask* task, HANDLE waiter);
 
     static DWORD WINAPI _run(LPVOID lpParameter);
@@ -32,6 +36,6 @@ private:
     DWORD threadId = 0;
     Camera* camera = nullptr;
     CameraState lastCameraState = CameraState::Null;
-    bool stopRequested = false;
+    std::atomic<bool> stopRequested{ false };
     std::list<std::pair<CameraTask*, HANDLE>> queue;
 };

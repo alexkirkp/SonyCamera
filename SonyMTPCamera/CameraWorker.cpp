@@ -15,17 +15,12 @@ CameraWorker::CameraWorker(Camera* pCamera)
 
 CameraWorker::~CameraWorker()
 {
-    // We need to wait a long time as the camera may be in the middle of a long exposure (shouldn't be, but... users!)
-    DWORD waitResult = WaitForSingleObject(mutexHandle, INFINITE);
-
-    if (waitResult != WAIT_OBJECT_0)
-    {
-        // Need to error here
-    }
-
     stopRequested = true;
 
-    ReleaseMutex(mutexHandle);
+    // The worker only checks the flag between steps, and the camera may be in the middle of a long
+    // exposure (shouldn't be, but... users!), so wait as long as it takes for the current step
+    // (previously this wait happened implicitly on the held mutex).
+    WaitForSingleObject(threadHandle, INFINITE);
 
     // Wait for run to exit
     DWORD exitCode = 0;
@@ -97,17 +92,12 @@ DWORD CameraWorker::Run()
 
     while (!stopRequested)
     {
-        // Only reason mutex would be claimed is to set the exit flag, so while INFINITE may not be ideal,
-        // we're expecting (essentially) an instant result
-        DWORD waitResult = WaitForSingleObject(mutexHandle, INFINITE);
-
-        if (waitResult != WAIT_OBJECT_0)
-        {
-            // Need to error here
-        }
-
+        // The mutex guards the queue only. It is held just long enough to pop a task and is NOT held
+        // while a step runs, so QueueTask never blocks behind a long step (e.g. an exposure).
         if (!currentTask)
         {
+            WaitForSingleObject(mutexHandle, INFINITE);
+
             if (!queue.empty())
             {
                 std::pair<CameraTask*, HANDLE> next = queue.front();
@@ -118,6 +108,8 @@ DWORD CameraWorker::Run()
                 LOGTRACE(L"Request pulled from queue");
 #endif
             }
+
+            ReleaseMutex(mutexHandle);
         }
 
         // We can start something
@@ -203,7 +195,6 @@ DWORD CameraWorker::Run()
             }
         }
 
-        ReleaseMutex(mutexHandle);
     }
 
     CoUninitialize();
