@@ -175,7 +175,10 @@ extern "C" {
     IMPEXP HRESULT SetFocusPosition(HANDLE hCamera, DWORD* position);
     /* GetFocusPosition/GetFocusLimit return a UINT16-range value on success and
        FOCUS_ERROR (0xFFFFFFFF) if the handle is invalid. (Previously they returned
-       ERROR_INVALID_HANDLE (6), which collided with a real position.) */
+       ERROR_INVALID_HANDLE (6), which collided with a real position.)
+       GetFocusPosition returns a value above GetFocusLimit (0xFFFF) while the position is
+       unknown: before the first move after the lens is attached, unless it is attached again
+       to the same camera (e.g. after a reconnect), which keeps the last settled position. */
 #define FOCUS_ERROR 0xFFFFFFFFUL
     IMPEXP DWORD GetFocusPosition(HANDLE hCamera);
     IMPEXP DWORD GetFocusLimit(HANDLE hCamera);

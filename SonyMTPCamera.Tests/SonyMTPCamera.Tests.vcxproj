@@ -81,6 +81,7 @@
     <ClCompile Include="DeviceRemovedTests.cpp" />
     <ClCompile Include="PropertyParserTests.cpp" />
     <ClCompile Include="MutexGuardTests.cpp" />
+    <ClCompile Include="FocusMemoryTests.cpp" />
     <ClCompile Include="FocusStepsTests.cpp" />
     <ClCompile Include="PTPContainerTests.cpp" />
   </ItemGroup>
@@ -98,6 +99,7 @@
     <ClCompile Include="..\SonyMTPCamera\CameraProperty.cpp" />
     <ClCompile Include="..\SonyMTPCamera\CameraSettings.cpp" />
     <ClCompile Include="..\SonyMTPCamera\PropertyInfo.cpp" />
+    <ClCompile Include="..\SonyMTPCamera\FocusMemory.cpp" />
     <ClCompile Include="..\SonyMTPCamera\FocusSteps.cpp" />
     <ClCompile Include="..\SonyMTPCamera\PTPContainer.cpp" />
   </ItemGroup>

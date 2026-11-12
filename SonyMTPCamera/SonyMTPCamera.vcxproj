@@ -222,6 +222,7 @@
     <ClInclude Include="resource.h" />
     <ClInclude Include="resource1.h" />
     <ClInclude Include="ResourceLoader.h" />
+    <ClInclude Include="FocusMemory.h" />
     <ClInclude Include="FocusSteps.h" />
     <ClInclude Include="SonyCamera.h" />
     <ClInclude Include="SonyMTPCamera.h" />
@@ -250,6 +251,7 @@
     <ClCompile Include="dllmain.cpp" />
     <ClCompile Include="DummyDevice.cpp" />
     <ClCompile Include="CameraException.cpp" />
+    <ClCompile Include="FocusMemory.cpp" />
     <ClCompile Include="FocusSteps.cpp" />
     <ClCompile Include="Image.cpp" />
     <ClCompile Include="Lockable.cpp" />

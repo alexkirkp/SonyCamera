@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "SonyCamera.h"
 #include "FocusSteps.h"
+#include "FocusMemory.h"
 #include <cmath>
 #include "Logger.h"
 #include "CameraException.h"
@@ -310,6 +311,11 @@ SonyCamera::SetFocus(UINT16 focusPosition)
         return GetFocusLimit() + 1;
     }
 
+    // Until this move settles, the position is in doubt: a camera that drops off mid-move must not
+    // come back believing the old one
+    GetFocusMemory().Forget(GetId());
+    m_focusMoveFailed = false;
+
     if (focusPosition > GetFocusLimit())
     {
         focusPosition = GetFocusLimit();
@@ -335,6 +341,7 @@ SonyCamera::SetFocus(UINT16 focusPosition)
     if (plan.nudges.empty())
     {
         LOGTRACE(L"Not altering focus, we're as close as we can get @ %.2f vs desired %d", m_focusPosition, focusPosition);
+        RememberFocus();
 
         return (UINT16)m_currentFocusPosition;
     }
@@ -344,7 +351,21 @@ SonyCamera::SetFocus(UINT16 focusPosition)
         MoveFocus(nudge);
     }
 
+    RememberFocus();
+
     return (UINT16)m_currentFocusPosition;
+}
+
+void
+SonyCamera::RememberFocus()
+{
+    if (m_focusMoveFailed)
+    {
+        LOGWARN(L"A focus move failed; not keeping position %.2f for a reconnect", m_focusPosition);
+        return;
+    }
+
+    GetFocusMemory().Remember(GetId(), m_focusKey, m_focusPosition);
 }
 
 UINT16
@@ -374,6 +395,7 @@ SonyCamera::SetFocusSteps(std::wstring steps, std::wstring sleeps, bool handsOff
     m_focusLimit = 0;
     m_currentFocusPosition = -1;
     m_focusPosition = -1;
+    m_focusKey.clear();
 
     FocusStepConfig cfg;
     std::wstring error;
@@ -398,6 +420,21 @@ SonyCamera::SetFocusSteps(std::wstring steps, std::wstring sleeps, bool handsOff
     {
         LOGINFO(L"Focus step %d = %.2f (of %d) - post-move-sleep = %d", st.first, st.second, m_focusLimit, m_focusSleeps[st.first]);
     }
+
+    // A reconnect makes a new camera object and attaches the lens again. The lens has not moved
+    // meanwhile, so pick up where the last one left it instead of reporting an unknown position
+    // (which reads as 65535) and resetting.
+    m_focusKey = steps + L"|" + sleeps;
+
+    double remembered = -1;
+
+    if (GetFocusMemory().Recall(GetId(), m_focusKey, remembered) && remembered <= m_focusLimit)
+    {
+        m_focusPosition = remembered;
+        m_currentFocusPosition = static_cast<INT16>(std::lround(remembered));
+
+        LOGINFO(L"Focus position %d (%.2f) kept from before this lens was attached again", m_currentFocusPosition, m_focusPosition);
+    }
 }
 
 void
@@ -413,7 +450,11 @@ SonyCamera::MoveFocus(INT16 step)
     SetPropertyTaskParams params(Property::FocusControl, pv);
     SetPropertyTask task(&params);
 
-    task.Run(this);
+    if (!task.Run(this))
+    {
+        LOGWARN(L"Focus move %d failed", step);
+        m_focusMoveFailed = true;
+    }
 
     //if (abs(step) == m_focusSteps.rbegin()->first)
     //{

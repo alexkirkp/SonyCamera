@@ -55,6 +55,7 @@ public:
 private:
     void ResetFocus();
     void MoveFocus(INT16 step);
+    void RememberFocus();
     Message* GetPropertyList();
 
     // The ext info version the camera accepted; 300 changes the 0x9209 enumeration layout
@@ -69,5 +70,7 @@ private:
     UINT16 m_lastFocusDiff = 0;
     UINT16 m_focusLimit = 0;
     bool m_focusHandsOff = false;
+    std::wstring m_focusKey;                    // the attached lens's steps/sleeps, for FocusMemory
+    bool m_focusMoveFailed = false;             // a nudge in the current SetFocus failed
 };
 
