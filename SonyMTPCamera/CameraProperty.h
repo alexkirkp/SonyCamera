@@ -28,8 +28,9 @@ public:
     virtual std::wstring AsString(PropertyValue* in) const;
     std::wstring ToString() const;
     // Parses one property starting at offset and returns the offset after it. Throws
-    // CameraException if the data is truncated or has a type we can't read.
-    DWORD Slurp(BYTE* data, DWORD dataLen, DWORD offset);
+    // CameraException if the data is truncated or has a type we can't read. twoEnumLists is set
+    // for ext info version 300, where enumerations carry a settable and a readable list.
+    DWORD Slurp(BYTE* data, DWORD dataLen, DWORD offset, bool twoEnumLists = false);
     virtual bool equals(CameraProperty* rhs) const;
     virtual int Compare(CameraProperty* rhs) const;
     PropertyInfo* GetInfo() const;
@@ -43,6 +44,7 @@ protected:
     WORD GetWORD(BYTE* data, DWORD dataLen, DWORD offset) const;
     DWORD GetDWORD(BYTE* data, DWORD dataLen, DWORD offset) const;
     PropertyValue* ReadData(BYTE* data, DWORD dataLen, DWORD &offset, DataType type);
+    void ReadEnumeration(BYTE* data, DWORD dataLen, DWORD& offset, DataType type, std::list<PropertyValue*>& values);
 
     PropertyInfo* m_info;
     PropertyValue* m_current;

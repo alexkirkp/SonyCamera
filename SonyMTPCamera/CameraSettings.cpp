@@ -12,7 +12,7 @@ CameraSettings::CameraSettings()
 #endif
 }
 
-CameraSettings::CameraSettings(Message *message)
+CameraSettings::CameraSettings(Message *message, bool twoEnumLists)
     : MessageReader(message)
 {
 #ifdef DEBUG
@@ -37,7 +37,7 @@ CameraSettings::CameraSettings(Message *message)
 
             try
             {
-                offset = prop->Slurp(data, dataLen, offset - 2);
+                offset = prop->Slurp(data, dataLen, offset - 2, twoEnumLists);
             }
             catch (const CameraException&)
             {

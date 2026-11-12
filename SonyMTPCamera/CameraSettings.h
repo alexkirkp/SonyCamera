@@ -12,7 +12,8 @@ class CameraSettings : public MessageReader
 {
 public:
     CameraSettings();
-    CameraSettings(Message *message);
+    // twoEnumLists: the dump was read with ext info version 300 (see CameraProperty::Slurp)
+    CameraSettings(Message *message, bool twoEnumLists = false);
     CameraSettings(const CameraSettings& rhs);
     void Copy(const CameraSettings& rhs);
     virtual ~CameraSettings();

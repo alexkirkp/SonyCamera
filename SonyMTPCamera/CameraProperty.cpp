@@ -341,8 +341,21 @@ CameraProperty::GetBYTE(BYTE* data, DWORD dataLen, DWORD offset) const
     return data[offset];
 }
 
+void
+CameraProperty::ReadEnumeration(BYTE* data, DWORD dataLen, DWORD& offset, DataType type, std::list<PropertyValue*>& values)
+{
+    WORD numValues = GetWORD(data, dataLen, offset);
+
+    offset += 2;
+
+    for (WORD i = 0; i < numValues; i++)
+    {
+        values.push_back(ReadData(data, dataLen, offset, type));
+    }
+}
+
 DWORD
-CameraProperty::Slurp(BYTE* data, DWORD dataLen, DWORD offset)
+CameraProperty::Slurp(BYTE* data, DWORD dataLen, DWORD offset, bool twoEnumLists)
 {
     m_info->SetId((Property)GetWORD(data, dataLen, offset));
 
@@ -391,18 +404,18 @@ CameraProperty::Slurp(BYTE* data, DWORD dataLen, DWORD offset)
 
     case FormMode::ENUMERATION:
     {
-        // Enum
-        WORD numValues = GetWORD(data, dataLen, offset);
-
-        offset += 2;
-
+        // Enum. From ext info version 300 the camera sends two lists: the values that can be set,
+        // then the values it can report. Writes need the first; the second is only a fallback.
         std::list<PropertyValue*> values;
+        std::list<PropertyValue*> getValues;
 
         try
         {
-            for (WORD i = 0; i < numValues; i++)
+            ReadEnumeration(data, dataLen, offset, type, values);
+
+            if (twoEnumLists)
             {
-                values.push_back(ReadData(data, dataLen, offset, type));
+                ReadEnumeration(data, dataLen, offset, type, getValues);
             }
         }
         catch (...)
@@ -412,7 +425,22 @@ CameraProperty::Slurp(BYTE* data, DWORD dataLen, DWORD offset)
                 delete v;
             }
 
+            for (PropertyValue* v : getValues)
+            {
+                delete v;
+            }
+
             throw;
+        }
+
+        if (values.empty())
+        {
+            values.swap(getValues);
+        }
+
+        for (PropertyValue* v : getValues)
+        {
+            delete v;
         }
 
         m_info->SetEnumeration(values);
@@ -461,10 +489,70 @@ CameraProperty::ReadData(BYTE* data, DWORD dataLen, DWORD &offset, DataType /*ty
         offset += 4;
         break;
 
+    case DataType::STR:
+    {
+        // PTP string: a character count (including the terminator), then UTF-16 characters
+        BYTE chars = GetBYTE(data, dataLen, offset);
+        std::wstring text;
+
+        offset++;
+        RequireBytes(dataLen, offset, 2 * (DWORD)chars);
+
+        for (BYTE i = 0; i < chars; i++)
+        {
+            wchar_t c = (wchar_t)GetWORD(data, dataLen, offset + 2 * i);
+
+            if (c != L'\0')
+            {
+                text += c;
+            }
+        }
+
+        offset += 2 * (DWORD)chars;
+        result = new PropertyValue(text);
+        break;
+    }
+
     default:
-        // STR, 64-bit, arrays or a zero-filled buffer: we can't tell how long the value is, so
-        // the rest of the dump can't be parsed either.
-        throw CameraException(L"Unsupported property data type");
+    {
+        // 64/128-bit values and arrays (0x4001..0x400a) are only listed with ext info version
+        // 300. Nothing uses them yet, so skip over them and keep reading the rest of the dump.
+        DWORD rawType = (DWORD)m_info->GetType();
+        DWORD scalar = (rawType >= 0x4001 && rawType <= 0x400a) ? rawType - 0x4000 : rawType;
+        DWORD size;
+
+        switch (scalar)
+        {
+        case 0x0007: case 0x0008: size = 8; break;
+        case 0x0009: case 0x000a: size = 16; break;
+        case 0x0001: case 0x0002: size = 1; break;
+        case 0x0003: case 0x0004: size = 2; break;
+        case 0x0005: case 0x0006: size = 4; break;
+        default:
+            // Unknown type or a zero-filled buffer: we can't tell how long the value is, so the
+            // rest of the dump can't be parsed either.
+            throw CameraException(L"Unsupported property data type");
+        }
+
+        if (scalar != rawType)
+        {
+            DWORD count = GetDWORD(data, dataLen, offset);
+
+            offset += 4;
+
+            if (count > (dataLen - offset) / size)
+            {
+                throw CameraException(L"Property data is truncated");
+            }
+
+            size *= count;
+        }
+
+        RequireBytes(dataLen, offset, size);
+        offset += size;
+        result = new PropertyValue();
+        break;
+    }
     }
 
     return result;
@@ -864,6 +952,8 @@ StringLookupProperty::StringLookupProperty()
         // Silent mode, save destination, mode dial priority (a6700 and later)
         AddResource(Property::SilentMode, 0x0001, IDS_OFF);
         AddResource(Property::SilentMode, 0x0002, IDS_ON);
+        AddResource(Property::ShutterType, 0x0002, IDS_SHUTTERTYPE_MECHANICAL);
+        AddResource(Property::ShutterType, 0x0003, IDS_SHUTTERTYPE_ELECTRONIC);
         AddResource(Property::SaveDestination, 0x0001, IDS_SAVEDEST_PC);
         AddResource(Property::SaveDestination, 0x0010, IDS_SAVEDEST_CARD);
         AddResource(Property::SaveDestination, 0x0011, IDS_SAVEDEST_PCCARD);
@@ -1016,6 +1106,7 @@ CameraPropertyFactory::CameraPropertyFactory()
     AddCreator(Property::LiveView, &pCreate<StringLookupProperty>);
     AddCreator(Property::FocusMode, &pCreate<StringLookupProperty>);
     AddCreator(Property::SilentMode, &pCreate<StringLookupProperty>);
+    AddCreator(Property::ShutterType, &pCreate<StringLookupProperty>);
     AddCreator(Property::SaveDestination, &pCreate<StringLookupProperty>);
     AddCreator(Property::PositionKeySetting, &pCreate<StringLookupProperty>);
     AddCreator(Property::FlashExposureLock, &pCreate<StringLookupProperty>);

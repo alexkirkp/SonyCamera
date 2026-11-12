@@ -86,17 +86,14 @@ SonyCamera::Initialize()
     delete rx;
 #endif
 
-    tx = new Message(COMMAND_SONY_GET_PROPERTY_LIST);
-
-    tx->AddParam(0x000000c8);
-
-    rx = m_device->Receive(tx);
+    m_extInfoVersion = SONY_EXT_INFO_VERSION_300;
+    rx = GetPropertyList();
     result &= rx->IsSuccess();
 
     m_supportedProperties = CameraSupportedProperties(rx);
+    LOGINFO(L"Ext info version %d accepted; camera lists %u properties and controls", m_extInfoVersion, m_supportedProperties.Size());
     LOGTRACE(L"Get Supported Properties (1) >> %s", m_supportedProperties.AsString().c_str());
 
-    delete tx;
     delete rx;
 
     tx = new Message(COMMAND_SONY_GET_NEXT_HANDLE);
@@ -113,16 +110,11 @@ SonyCamera::Initialize()
     delete tx;
     delete rx;
 
-    tx = new Message(COMMAND_SONY_GET_PROPERTY_LIST);
-
-    tx->AddParam(0x000000c8);
-
-    rx = m_device->Receive(tx);
+    rx = GetPropertyList();
     result &= rx->IsSuccess();
 
     LOGTRACE(L"Get Supported Properties (2) >> %s", rx->Dump().c_str());
 
-    delete tx;
     delete rx;
 
     try
@@ -143,6 +135,31 @@ SonyCamera::Initialize()
     return result;
 }
 
+// Sends 0x9202 with m_extInfoVersion. A camera that refuses 300 is asked again with 200, and that
+// version is kept for the rest of the session. The caller owns the returned message.
+Message*
+SonyCamera::GetPropertyList()
+{
+    std::unique_ptr<Message> tx(new Message(COMMAND_SONY_GET_PROPERTY_LIST));
+
+    tx->AddParam(m_extInfoVersion);
+
+    Message* rx = m_device->Receive(tx.get());
+
+    if (!rx->IsSuccess() && m_extInfoVersion != SONY_EXT_INFO_VERSION_200)
+    {
+        LOGWARN(L"Camera refused ext info version %d (result x%04x); retrying with %d", m_extInfoVersion, rx->GetCommand(), SONY_EXT_INFO_VERSION_200);
+        delete rx;
+
+        m_extInfoVersion = SONY_EXT_INFO_VERSION_200;
+        tx.reset(new Message(COMMAND_SONY_GET_PROPERTY_LIST));
+        tx->AddParam(m_extInfoVersion);
+        rx = m_device->Receive(tx.get());
+    }
+
+    return rx;
+}
+
 bool
 SonyCamera::RefreshSettings(bool refreshFakePropertiesToo)
 {
@@ -155,7 +172,7 @@ SonyCamera::RefreshSettings(bool refreshFakePropertiesToo)
 
     if (rx->IsSuccess())
     {
-        CameraSettings cs = CameraSettings(rx.get());
+        CameraSettings cs = CameraSettings(rx.get(), m_extInfoVersion >= SONY_EXT_INFO_VERSION_300);
 
         // Only need to load up the fakes first time thru
         if (!m_settings || refreshFakePropertiesToo)

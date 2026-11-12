@@ -13,6 +13,12 @@ constexpr auto COMMAND_READ_SETTINGS = 0x9209;
    Seems to be broken into two sections... */
 constexpr auto COMMAND_SONY_GET_PROPERTY_LIST = 0x9202;
 
+/* Ext info (protocol) version sent with 0x9202. With 200 newer bodies (a6700) list only ~30
+   legacy properties; with 300 they list everything, including shutter type (0xd0df), silent
+   mode (0xd0db) and PC mode control (0xd25a). Sony's own apps send 300. */
+constexpr auto SONY_EXT_INFO_VERSION_300 = 0x012c;
+constexpr auto SONY_EXT_INFO_VERSION_200 = 0x00c8;
+
    // Sony Commands - Unsure about these ones
 constexpr auto COMMAND_SONY_GET_NEXT_HANDLE = 0x9201;
 
@@ -49,6 +55,10 @@ public:
 private:
     void ResetFocus();
     void MoveFocus(INT16 step);
+    Message* GetPropertyList();
+
+    // The ext info version the camera accepted; 300 changes the 0x9209 enumeration layout
+    DWORD m_extInfoVersion = SONY_EXT_INFO_VERSION_300;
 
     std::map<UINT16, UINT16> m_focusSteps;
     std::map<UINT16, UINT16> m_focusSleeps;

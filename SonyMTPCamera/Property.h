@@ -79,6 +79,7 @@ enum class Property {
     CopyrightInfo               = 0x501f,
 
     SilentMode                  = 0xd0db,  // 1 = off, 2 = on (silent mode removes BULB from the shutter list)
+    ShutterType                 = 0xd0df,  // 2 = mechanical, 3 = electronic (a6700; only listed with ext info version 300)
 
     FlashCompensation           = 0xd200,
     DROAutoHDR                  = 0xd201, // **  on = 1, off = 31
