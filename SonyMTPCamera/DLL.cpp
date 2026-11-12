@@ -1578,7 +1578,9 @@ SetPropertyValue(HANDLE hCamera, DWORD propertyId, DWORD value)
 
             LOGINFO(L"Constructed value = %s", val.ToString().c_str());
 
-            if (!v->CanNudge())
+            // A property the camera lists as writable takes the value itself (the a6700's ISO at ext
+            // info version 300); only the up/down-only ones need nudging
+            if (!v->CanNudge() || info->GetAccess() == Accessibility::READ_WRITE)
             {
                 SetPropertyTaskParams params((Property)propertyId, val);
                 SetPropertyTask task(&params);

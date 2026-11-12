@@ -309,7 +309,9 @@ PropertyValue::ToString() const
         break;
 
     default:
-        throw;
+        // A bare throw here has no active exception and terminates the host process
+        builder << L"(type x" << std::hex << std::setw(4) << std::setfill(L'0') << (int)m_type << L")";
+        break;
     }
 
     return builder.str();
