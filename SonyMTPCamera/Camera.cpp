@@ -363,10 +363,10 @@ Camera::LoadFakeProperties(CameraSettings* settings) const
     p->SetInfo(inf);
     settings->AddProperty(p);
 
-    // Some cameras do not return info for the shutter control "buttons"
-    // if they're missing, lets create some fake ones that always return "up"
-    // but mimic the expected button-type so other pieces of the code can
-    // continue to work
+    // Some cameras (e.g. a6700) do not return info for the shutter control "buttons".
+    // If they're missing, create stand-ins that mimic the expected button-type so
+    // writes still go out. Their value is a placeholder - the camera never reports
+    // it - so they are marked as stand-ins and the pre-capture check skips them.
     if (!settings->GetProperty(Property::ShutterHalfDown))
     {
         LOGTRACE(L"Adding fake 'ShutterHalfDown' property as camera forgot to enumerate");
@@ -382,6 +382,7 @@ Camera::LoadFakeProperties(CameraSettings* settings) const
         inf->SetFormMode(FormMode::NONE);
         inf->SetAccess(Accessibility::WRITE_ONLY_BUTTON);
         inf->SetSonySpare(1);
+        inf->SetStandIn(true);
         p->SetInfo(inf);
 
         settings->AddProperty(p);
@@ -402,6 +403,7 @@ Camera::LoadFakeProperties(CameraSettings* settings) const
         inf->SetFormMode(FormMode::NONE);
         inf->SetAccess(Accessibility::WRITE_ONLY_BUTTON);
         inf->SetSonySpare(1);
+        inf->SetStandIn(true);
         p->SetInfo(inf);
         settings->AddProperty(p);
     }
@@ -651,11 +653,18 @@ Camera::StartCapture(double duration, OutputMode outputMode, DWORD /*flags*/)
 
     // These null checks are necessary as some models advertise the property
     // but then don't actually return it.
-    // If there are too many I may add some code to support default values
-    // so we don't need all these checks.
+    // A stand-in (added because the camera didn't enumerate the button) carries a
+    // placeholder value, not the real button state, so there's nothing to check.
+    auto isStandIn = [](CameraSettings* settings, Property id)
+    {
+        CameraProperty* prop = settings->GetProperty(id);
+
+        return prop && prop->GetInfo() && prop->GetInfo()->IsStandIn();
+    };
+
     PropertyValue* v = cs->GetPropertyValue(Property::ShutterFullDown);
 
-    if (!v || v->GetUINT16() != up.GetUINT16())
+    if (!isStandIn(cs.get(), Property::ShutterFullDown) && (!v || v->GetUINT16() != up.GetUINT16()))
     {
         LOGWARN(L"ShutterFullDown is %s, clearing", v ? L"set" : L"unreported");
 
@@ -674,7 +683,7 @@ Camera::StartCapture(double duration, OutputMode outputMode, DWORD /*flags*/)
 
     v = cs2->GetPropertyValue(Property::ShutterHalfDown);
 
-    if (!v || v->GetUINT16() != up.GetUINT16())
+    if (!isStandIn(cs2.get(), Property::ShutterHalfDown) && (!v || v->GetUINT16() != up.GetUINT16()))
     {
         LOGWARN(L"ShutterHalfDown is %s, clearing", v ? L"set" : L"unreported");
         SetProperty(Property::ShutterHalfDown, &up);

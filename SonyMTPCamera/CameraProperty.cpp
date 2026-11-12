@@ -235,6 +235,12 @@ CameraProperty::equals(CameraProperty* rhs) const
         same = false;
     }
 
+    // A real reading replaces a stand-in even when the values happen to match
+    if (m_info->IsStandIn() != rhs->m_info->IsStandIn())
+    {
+        same = false;
+    }
+
     switch (m_info->GetType())
     {
     case DataType::INT8:

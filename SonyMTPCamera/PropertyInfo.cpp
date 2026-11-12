@@ -27,6 +27,7 @@ PropertyInfo::Copy(const PropertyInfo* rhs)
     m_type = rhs->m_type;
     m_access = rhs->m_access;
     m_sonySpare = rhs->m_sonySpare;
+    m_standIn = rhs->m_standIn;
     SetDefault(new PropertyValue(*rhs->m_default));
     m_form = rhs->m_form;
     SetRange(rhs->m_rangeLo ? new PropertyValue(*rhs->m_rangeLo) : nullptr,
@@ -115,6 +116,18 @@ bool
 PropertyInfo::IsWriteIgnored() const
 {
     return !IsButton() && (m_sonySpare == 0 || m_sonySpare == 2);
+}
+
+void
+PropertyInfo::SetStandIn(bool standIn)
+{
+    m_standIn = standIn;
+}
+
+bool
+PropertyInfo::IsStandIn() const
+{
+    return m_standIn;
 }
 
 void

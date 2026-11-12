@@ -25,6 +25,10 @@ public:
     bool IsButton() const;
     // The descriptor's enabled byte says a write would be ignored: 0 unavailable, 2 display-only
     bool IsWriteIgnored() const;
+    // Added by the DLL because the camera didn't enumerate it; its value is a placeholder, not
+    // something the camera reported
+    void SetStandIn(bool standIn);
+    bool IsStandIn() const;
     void SetDefault(PropertyValue* def);
     PropertyValue* GetDefault() const;
     void SetFormMode(FormMode mode);
@@ -46,6 +50,7 @@ private:
     Accessibility m_access = Accessibility::READ_ONLY;
     FormMode m_form = FormMode::NONE;
     BYTE m_sonySpare = 0;
+    bool m_standIn = false;
 
     PropertyValue* m_default = nullptr;
     PropertyValue* m_rangeLo = nullptr;

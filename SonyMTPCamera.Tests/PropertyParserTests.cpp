@@ -303,3 +303,50 @@ TEST(PropertyInfo_EnabledByteDecidesWhetherAWriteIsIgnored)
     info.SetSonySpare(1);
     CHECK(!info.IsButton());
 }
+
+// A shutter button as LoadFakeProperties builds it (or as a camera would report it)
+static CameraProperty* MakeButton(Property id, BYTE value, bool standIn)
+{
+    CameraProperty* p = new CameraProperty();
+    PropertyInfo* inf = new PropertyInfo();
+
+    inf->SetId(id);
+    inf->SetDefault(new PropertyValue((UINT8)value));
+    inf->SetType(DataType::UINT8);
+    inf->SetAccess(Accessibility::WRITE_ONLY_BUTTON);
+    inf->SetSonySpare(1);
+    inf->SetStandIn(standIn);
+    p->SetInfo(inf);
+    p->SetCurrentValue(new PropertyValue((UINT8)value));
+
+    return p;
+}
+
+TEST(PropertyInfo_StandInSurvivesARefreshThatDoesNotReportIt)
+{
+    CameraSettings kept;
+    kept.AddProperty(MakeButton(Property::ShutterHalfDown, 0, true));
+
+    CameraSettings refreshed;
+    refreshed.AddProperty(MakeButton(Property::ShutterFullDown, 1, false));
+    kept.Copy(refreshed);
+
+    CHECK(kept.GetProperty(Property::ShutterHalfDown)->GetInfo()->IsStandIn());
+    CHECK(!kept.GetProperty(Property::ShutterFullDown)->GetInfo()->IsStandIn());
+
+    // A copied info keeps the flag
+    PropertyInfo copy(kept.GetProperty(Property::ShutterHalfDown)->GetInfo());
+    CHECK(copy.IsStandIn());
+}
+
+TEST(PropertyInfo_RealReadingReplacesAStandInEvenWithTheSameValue)
+{
+    CameraSettings kept;
+    kept.AddProperty(MakeButton(Property::ShutterHalfDown, 0, true));
+
+    CameraSettings refreshed;
+    refreshed.AddProperty(MakeButton(Property::ShutterHalfDown, 0, false));
+    kept.Copy(refreshed);
+
+    CHECK(!kept.GetProperty(Property::ShutterHalfDown)->GetInfo()->IsStandIn());
+}
