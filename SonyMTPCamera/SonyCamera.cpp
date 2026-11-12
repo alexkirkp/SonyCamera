@@ -228,8 +228,9 @@ SonyCamera::SetProperty(const Property id, PropertyValue* value)
         {
             messageType = COMMAND_SONY_SET_PROPERTY;
         }
-        else if (info->GetSonySpare() != 0)
+        else if (info->GetSonySpare() != 0 && (info->IsButton() || prop->CanNudge()))
         {
+            // Button controls and up/down nudges only; a get-only value property is not a button
             messageType = COMMAND_SONY_SET_PROPERTY2;
         }
         else

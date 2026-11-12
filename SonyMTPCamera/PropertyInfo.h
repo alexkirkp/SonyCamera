@@ -21,6 +21,10 @@ public:
     Accessibility GetAccess() const;
     void SetSonySpare(BYTE sonySpare);
     BYTE GetSonySpare() const;
+    // Button-style control (shutter, focus): written with the "set control" command, not as a value
+    bool IsButton() const;
+    // The descriptor's enabled byte says a write would be ignored: 0 unavailable, 2 display-only
+    bool IsWriteIgnored() const;
     void SetDefault(PropertyValue* def);
     PropertyValue* GetDefault() const;
     void SetFormMode(FormMode mode);

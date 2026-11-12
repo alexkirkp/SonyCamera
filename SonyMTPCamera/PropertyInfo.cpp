@@ -103,6 +103,20 @@ PropertyInfo::GetSonySpare() const
     return m_sonySpare;
 }
 
+bool
+PropertyInfo::IsButton() const
+{
+    return m_access == Accessibility::WRITE_ONLY_BUTTON
+        || m_access == Accessibility::UNKNOWN_82
+        || m_access == Accessibility::UNKNOWN_83;
+}
+
+bool
+PropertyInfo::IsWriteIgnored() const
+{
+    return !IsButton() && (m_sonySpare == 0 || m_sonySpare == 2);
+}
+
 void
 PropertyInfo::SetDefault(PropertyValue* def)
 {

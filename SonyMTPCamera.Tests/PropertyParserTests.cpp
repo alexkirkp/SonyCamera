@@ -279,3 +279,27 @@ TEST(PropertyParser_EnumCountLargerThanTheDataIsRejected)
 
     CHECK_EQ(ParsedCount(w, 0xFFFFFF), 0);
 }
+
+TEST(PropertyInfo_EnabledByteDecidesWhetherAWriteIsIgnored)
+{
+    PropertyInfo info;
+
+    info.SetAccess(Accessibility::READ_WRITE);
+
+    info.SetSonySpare(1);
+    CHECK(!info.IsWriteIgnored());
+    info.SetSonySpare(0);
+    CHECK(info.IsWriteIgnored());
+    info.SetSonySpare(2);
+    CHECK(info.IsWriteIgnored());
+
+    // Buttons are exempt, whatever their enabled byte
+    info.SetAccess(Accessibility::WRITE_ONLY_BUTTON);
+    CHECK(info.IsButton());
+    CHECK(!info.IsWriteIgnored());
+
+    // A get-only value property is not a button
+    info.SetAccess(Accessibility::READ_ONLY);
+    info.SetSonySpare(1);
+    CHECK(!info.IsButton());
+}

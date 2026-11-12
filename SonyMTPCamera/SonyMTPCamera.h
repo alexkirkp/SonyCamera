@@ -162,6 +162,12 @@ extern "C" {
     IMPEXP HRESULT GetPropertyValueOption(HANDLE hCamera, DWORD propertyId, PROPERTYVALUEOPTION* option, DWORD index);
     IMPEXP HRESULT GetSinglePropertyValue(HANDLE hCamera, DWORD propertyId, PROPERTYVALUE* value);
     IMPEXP HRESULT GetAllPropertyValues(HANDLE hCamera, PROPERTYVALUE* values, DWORD* count);
+    /* Returns ERROR_SUCCESS once the camera accepted the write; the settings are refreshed before
+       returning, so GetSinglePropertyValue straight after shows the camera's value.
+       ERROR_ACCESS_DENIED: the write was not sent because the property is unavailable or display-only
+       (descriptor enabled byte, flags >> 8, is 0 or 2 - e.g. 500E with the mode dial in charge), or
+       it is a get-only value property that can't be nudged (e.g. 5007 on some lenses).
+       ERROR_NOT_FOUND: no such property. ERROR_CAN_NOT_COMPLETE: the camera rejected the write. */
     IMPEXP HRESULT SetPropertyValue(HANDLE hCamera, DWORD propertyId, DWORD value);
     IMPEXP HRESULT SetExposureTime(HANDLE hCamera, float exposureTime, PROPERTYVALUE* valueOut);
 

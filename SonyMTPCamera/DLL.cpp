@@ -1527,6 +1527,24 @@ SetPropertyValue(HANDLE hCamera, DWORD propertyId, DWORD value)
         {
             LOGINFO(L"Property x%04x = %s", propertyId, v->ToString().c_str());
 
+            PropertyInfo* info = v->GetInfo();
+
+            // The camera answers OK to writes it then ignores, so don't send them
+            if (info->IsWriteIgnored())
+            {
+                LOGWARN(L"Out: SetPropertyValue - property x%04x is not writable right now (enabled = %d)", propertyId, (int)info->GetSonySpare());
+
+                return ERROR_ACCESS_DENIED;
+            }
+
+            // A get-only value property that can't be nudged would go out as a button press and change nothing
+            if (info->GetAccess() != Accessibility::READ_WRITE && !info->IsButton() && !v->CanNudge())
+            {
+                LOGWARN(L"Out: SetPropertyValue - property x%04x is get-only (access = x%02x)", propertyId, (int)info->GetAccess());
+
+                return ERROR_ACCESS_DENIED;
+            }
+
             // Try to just do it
             switch (v->GetInfo()->GetType())
             {
@@ -1570,6 +1588,28 @@ SetPropertyValue(HANDLE hCamera, DWORD propertyId, DWORD value)
                     LOGWARN(L"Out: SetPropertyValue - setting property x%04x failed", propertyId);
 
                     return ERROR_CAN_NOT_COMPLETE;
+                }
+
+                // Read the camera's value back so a read straight after this call is not stale.
+                // The camera can lag behind its OK, so give it a short while to show the new value.
+                std::unique_ptr<CameraProperty> target(v->Clone());
+
+                target->SetCurrentValue(new PropertyValue(val));
+
+                for (int attempt = 0; attempt < 10; attempt++)
+                {
+                    RefreshPropertiesTask refresh(false);
+
+                    refresh.Run(camera);
+
+                    std::unique_ptr<CameraProperty> latest(camera->GetProperty((Property)propertyId));
+
+                    if (!latest || latest->Compare(target.get()) == 0)
+                    {
+                        break;
+                    }
+
+                    Sleep(50);
                 }
             }
             else
@@ -1616,6 +1656,10 @@ SetPropertyValue(HANDLE hCamera, DWORD propertyId, DWORD value)
 
                         return ERROR_CAN_NOT_COMPLETE;
                     }
+
+                    RefreshPropertiesTask refresh(false);
+
+                    refresh.Run(camera);
                 }
             }
 
