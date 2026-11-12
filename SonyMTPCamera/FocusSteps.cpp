@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "FocusSteps.h"
+#include <cmath>
 #include <cwchar>
 #include <cwctype>
 #include <vector>
@@ -140,6 +141,7 @@ bool ParseFocusSteps(const std::wstring& steps, const std::wstring& sleeps, Focu
         }
 
         cfg.steps[(UINT16)(i + 1)] = (UINT16)d;
+        cfg.exactSteps[(UINT16)(i + 1)] = d;
     }
 
     if (sleeps.empty() || !ParseSleeps(sleeps, divisors.size(), cfg.sleeps))
@@ -151,4 +153,64 @@ bool ParseFocusSteps(const std::wstring& steps, const std::wstring& sleeps, Focu
 
     out = cfg;
     return true;
+}
+
+FocusPlan PlanFocusMove(double from, double target, const std::map<UINT16, double>& sizes, UINT16 limit)
+{
+    FocusPlan plan;
+    plan.landing = from;
+
+    if (sizes.empty())
+    {
+        return plan;
+    }
+
+    if (target < 0)
+    {
+        target = 0;
+    }
+
+    if (target > limit)
+    {
+        target = limit;
+    }
+
+    const double smallest = sizes.begin()->second;
+    const size_t maxNudges = sizes.size() * 10;
+
+    // Each nudge leaves less distance than before (the closest step is always under twice the
+    // distance left while that is over half the smallest step), so this ends; the cap is a backstop.
+    while (std::fabs(target - plan.landing) > smallest / 2 && plan.nudges.size() < maxNudges)
+    {
+        double remaining = target - plan.landing;
+        double distance = std::fabs(remaining);
+        UINT16 best = sizes.begin()->first;
+        double bestDiff = std::fabs(distance - sizes.begin()->second);
+
+        for (const auto& s : sizes)
+        {
+            double diff = std::fabs(distance - s.second);
+
+            if (diff < bestDiff)
+            {
+                best = s.first;
+                bestDiff = diff;
+            }
+        }
+
+        plan.nudges.push_back(remaining < 0 ? -(INT16)best : (INT16)best);
+        plan.landing += remaining < 0 ? -sizes.at(best) : sizes.at(best);
+
+        if (plan.landing < 0)
+        {
+            plan.landing = 0;
+        }
+
+        if (plan.landing > limit)
+        {
+            plan.landing = limit;
+        }
+    }
+
+    return plan;
 }

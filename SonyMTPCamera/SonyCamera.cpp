@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "SonyCamera.h"
 #include "FocusSteps.h"
+#include <cmath>
 #include "Logger.h"
 #include "CameraException.h"
 #include "Locker.h"
@@ -290,7 +291,7 @@ SonyCamera::ResetFocus()
     }
 
     // The "+1" covers situation where biggest step is not an integer
-    numResetSteps = (GetFocusLimit() - f) / m_focusSteps.rbegin()->second + 1;
+    numResetSteps = static_cast<UINT16>((GetFocusLimit() - f) / m_focusSteps.rbegin()->second) + 1;
 
     LOGTRACE(L"Resetting focus, %d moves of size %d to get from %d to %d", numResetSteps, maxStepSize, f, GetFocusLimit());
 
@@ -309,8 +310,12 @@ SonyCamera::SetFocus(UINT16 focusPosition)
         return GetFocusLimit() + 1;
     }
 
+    if (focusPosition > GetFocusLimit())
+    {
+        focusPosition = GetFocusLimit();
+    }
+
     DeviceInfo di = GetDeviceInfo();
-    UINT16 maxStepSize = m_focusSteps.rbegin()->first;
     UINT16 focusDiff = static_cast<UINT16>(abs(m_lastFocusPosition - focusPosition));
 
     if (m_currentFocusPosition < 0 || m_currentFocusPosition > GetFocusLimit()
@@ -323,47 +328,20 @@ SonyCamera::SetFocus(UINT16 focusPosition)
     m_lastFocusPosition = m_currentFocusPosition;
     m_lastFocusDiff = static_cast<UINT16>(abs(m_currentFocusPosition - focusPosition));
 
-    if (abs(m_currentFocusPosition - focusPosition) <= m_focusSteps.begin()->second)
+    // Plan with the unrounded step sizes: rounding each one (a 2.54 step counted as 2) made the
+    // reported position drift from where the lens really was
+    FocusPlan plan = PlanFocusMove(m_focusPosition, focusPosition, m_focusSteps, GetFocusLimit());
+
+    if (plan.nudges.empty())
     {
-        LOGTRACE(L"Not altering focus, we're as close as we can get @ %d vs desired %d", m_currentFocusPosition, focusPosition);
+        LOGTRACE(L"Not altering focus, we're as close as we can get @ %.2f vs desired %d", m_focusPosition, focusPosition);
 
         return (UINT16)m_currentFocusPosition;
     }
 
-    int attempts = 0;
-
-    while (abs(m_currentFocusPosition - focusPosition) >= m_focusSteps[1] && attempts < maxStepSize * 10)
+    for (INT16 nudge : plan.nudges)
     {
-        attempts++;
-
-        // Calculate steps to get from here to there
-        INT16 diff = focusPosition - m_currentFocusPosition;
-
-        // We could just find largest step LESS than desired position,
-        // but it would be more efficient to find largest step CLOSEST
-        // to desired position, then repeat
-        INT16 idealStep = 1;
-
-        INT16 usize = static_cast<INT16>(abs(diff));
-        INT16 bestDiff = static_cast<INT16>(abs(usize - m_focusSteps[idealStep]));
-
-        for (UINT16 test_id = idealStep + 1; test_id <= maxStepSize; test_id += 1)
-        {
-            INT16 diff2 = static_cast<INT16>(abs(usize - (INT16)m_focusSteps[test_id]));
-
-            if (diff2 < bestDiff)
-            {
-                idealStep = test_id;
-                bestDiff = diff2;
-            }
-        }
-
-        if (diff < 0)
-        {
-            idealStep = -idealStep;
-        }
-
-        MoveFocus(idealStep);
+        MoveFocus(nudge);
     }
 
     return (UINT16)m_currentFocusPosition;
@@ -395,6 +373,7 @@ SonyCamera::SetFocusSteps(std::wstring steps, std::wstring sleeps, bool handsOff
     m_focusSleeps.clear();
     m_focusLimit = 0;
     m_currentFocusPosition = -1;
+    m_focusPosition = -1;
 
     FocusStepConfig cfg;
     std::wstring error;
@@ -412,21 +391,21 @@ SonyCamera::SetFocusSteps(std::wstring steps, std::wstring sleeps, bool handsOff
     }
 
     m_focusLimit = cfg.limit;
-    m_focusSteps = cfg.steps;
+    m_focusSteps = cfg.exactSteps;
     m_focusSleeps = cfg.sleeps;
 
     for (const auto& st : m_focusSteps)
     {
-        LOGINFO(L"Focus step %d = %d (of %d) - post-move-sleep = %d", st.first, st.second, m_focusLimit, m_focusSleeps[st.first]);
+        LOGINFO(L"Focus step %d = %.2f (of %d) - post-move-sleep = %d", st.first, st.second, m_focusLimit, m_focusSleeps[st.first]);
     }
 }
 
 void
 SonyCamera::MoveFocus(INT16 step)
 {
-    short diff = m_focusSteps[static_cast<UINT16>(abs(step))];
+    double diff = m_focusSteps[static_cast<UINT16>(abs(step))];
 
-    LOGTRACE(L"Moving focus by %d (current = %d, step_size = %d).. ", step, m_currentFocusPosition, diff);
+    LOGTRACE(L"Moving focus by %d (current = %.2f, step_size = %.2f).. ", step, m_focusPosition, diff);
 
     PropertyValue pv(step);
 //    SetProperty(Property::FocusControl, &pv);
@@ -444,25 +423,27 @@ SonyCamera::MoveFocus(INT16 step)
     //{
         if (step < 0)
         {
-            m_currentFocusPosition -= diff;
+            m_focusPosition -= diff;
         }
         else
         {
-            m_currentFocusPosition += diff;
+            m_focusPosition += diff;
         }
 
-        if (m_currentFocusPosition < 0)
+        if (m_focusPosition < 0)
         {
-            m_currentFocusPosition = 0;
+            m_focusPosition = 0;
         }
 
-        if (m_currentFocusPosition > GetFocusLimit())
+        if (m_focusPosition > GetFocusLimit())
         {
-            m_currentFocusPosition = GetFocusLimit();
+            m_focusPosition = GetFocusLimit();
         }
+
+        m_currentFocusPosition = static_cast<INT16>(std::lround(m_focusPosition));
 //    }
 
-    LOGTRACE(L" new position = %d\n", m_currentFocusPosition);
+    LOGTRACE(L" new position = %d (%.2f)\n", m_currentFocusPosition, m_focusPosition);
 
     Sleep(m_focusSleeps[static_cast<UINT16>(abs(step))]);
 }

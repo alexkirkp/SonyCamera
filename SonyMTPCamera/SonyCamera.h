@@ -60,9 +60,11 @@ private:
     // The ext info version the camera accepted; 300 changes the 0x9209 enumeration layout
     DWORD m_extInfoVersion = SONY_EXT_INFO_VERSION_300;
 
-    std::map<UINT16, UINT16> m_focusSteps;
+    std::map<UINT16, double> m_focusSteps;      // step index -> distance, unrounded
     std::map<UINT16, UINT16> m_focusSleeps;
-    INT16 m_currentFocusPosition = -1;
+    INT16 m_currentFocusPosition = -1;          // m_focusPosition rounded; -1 while unknown
+    double m_focusPosition = -1;                // dead-reckoned position, unrounded so that
+                                                // fractional step sizes do not drift
     UINT16 m_lastFocusPosition = 0;
     UINT16 m_lastFocusDiff = 0;
     UINT16 m_focusLimit = 0;
